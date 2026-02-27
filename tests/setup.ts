@@ -2,28 +2,60 @@ import { vi } from 'vitest'
 import { config } from '@vue/test-utils'
 
 // Create mock functions BEFORE any imports that might use them
-const mockSupabaseUser = vi.fn(() => ({ value: null }))
+const mockSupabaseUser = vi.fn(() => ({ value: null as any }))
 const mockSupabaseClient = vi.fn(() => ({
   auth: {
-    signOut: vi.fn().mockResolvedValue({ error: null })
-  }
+    signOut: vi.fn().mockResolvedValue({ error: null }),
+    getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    signInWithPassword: vi.fn(),
+    signUp: vi.fn(),
+    updateUser: vi.fn()
+  },
+  from: vi.fn(() => ({
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    delete: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data: null, error: null })
+  }))
+}))
+const mockNavigateTo = vi.fn()
+const mockUseRoute = vi.fn(() => ({
+  params: {},
+  query: {}
 }))
 
 // Mock Nuxt auto-imports - this needs to happen BEFORE any component imports
 vi.mock('#imports', () => ({
   useSupabaseUser: mockSupabaseUser,
   useSupabaseClient: mockSupabaseClient,
-  navigateTo: vi.fn(),
-  definePageMeta: vi.fn()
+  navigateTo: mockNavigateTo,
+  definePageMeta: vi.fn(),
+  useRoute: mockUseRoute,
+  useAsyncData: vi.fn(),
+  useHead: vi.fn()
 }))
+
+// Mock Vue reactivity auto-imports
+vi.mock('vue', async () => {
+  const actual = await vi.importActual('vue')
+  return {
+    ...actual,
+    ref: actual.ref,
+    computed: actual.computed,
+    watch: actual.watch,
+    onMounted: actual.onMounted
+  }
+})
 
 // Also mock the @nuxtjs/supabase module directly since components might import from there
 vi.mock('@nuxtjs/supabase', async () => {
-  const actual = await vi.importActual<typeof import('@nuxtjs/supabase')>('@nuxtjs/supabase')
   return {
-    ...actual,
     useSupabaseUser: mockSupabaseUser,
-    useSupabaseClient: mockSupabaseClient,
+    useSupabaseClient: mockSupabaseClient
   }
 })
 
@@ -41,7 +73,8 @@ const mockUser = {
   email: 'test@example.com',
   user_metadata: {
     username: 'testuser'
-  }
+  },
+  created_at: '2024-01-01T00:00:00.000Z'
 }
 
 const mockPost = {
@@ -56,12 +89,20 @@ const mockPost = {
 
 // Helper to mock logged-in user
 function mockLoggedInUser() {
-  mockSupabaseUser.mockReturnValue({ value: mockUser as any })
+  mockSupabaseUser.mockReturnValue({ value: mockUser })
 }
 
 // Helper to mock logged-out user  
 function mockLoggedOutUser() {
   mockSupabaseUser.mockReturnValue({ value: null })
+}
+
+// Helper to reset all mocks
+function resetMocks() {
+  mockSupabaseUser.mockClear()
+  mockSupabaseClient.mockClear()
+  mockNavigateTo.mockClear()
+  mockUseRoute.mockClear()
 }
 
 export { 
@@ -70,5 +111,7 @@ export {
   mockLoggedInUser, 
   mockLoggedOutUser,
   mockSupabaseUser,
-  mockSupabaseClient
+  mockSupabaseClient,
+  mockNavigateTo,
+  resetMocks
 }

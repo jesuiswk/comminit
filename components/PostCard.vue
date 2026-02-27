@@ -11,19 +11,21 @@
   </NuxtLink>
 </template>
 
-<script setup>
-const props = defineProps({
-  post: {
-    type: Object,
-    required: true
-  }
-})
+<script setup lang="ts">
+import type { PostWithAuthor } from '~/types'
+
+interface Props {
+  post: PostWithAuthor
+}
+
+const props = defineProps<Props>()
 
 const excerpt = computed(() => {
-  return props.post.content?.slice(0, 150) + '...' || ''
+  const content = props.post.content || ''
+  return content.length > 150 ? content.slice(0, 150) + '...' : content
 })
 
-const formatDate = (date) => {
+const formatDate = (date: string): string => {
   return new Date(date).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric'

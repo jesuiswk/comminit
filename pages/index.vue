@@ -9,26 +9,52 @@
     </div>
 
     <div class="posts-section">
-      <h2>Latest Posts</h2>
-      <div v-if="pending" class="text-center">Loading...</div>
+      <div class="section-header">
+        <h2>Latest Posts</h2>
+        <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary btn-sm">
+          + New Post
+        </NuxtLink>
+      </div>
+      
+      <LoadingSpinner v-if="pending" />
+      <ErrorMessage v-else-if="error" :message="error" @retry="refresh" />
       <div v-else-if="posts?.length" class="posts-grid">
         <PostCard v-for="post in posts" :key="post.id" :post="post" />
       </div>
-      <div v-else class="text-center">No posts yet. Be the first to post!</div>
+      <div v-else class="text-center empty-state">
+        <p>No posts yet. Be the first to post!</p>
+        <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary">Create Post</NuxtLink>
+      </div>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import type { PostWithAuthor } from '~/types'
+
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
+const error = ref('')
 
-const { data: posts, pending } = await useAsyncData('posts', async () => {
-  const { data } = await supabase
-    .from('posts')
-    .select('*, author:profiles(username)')
-    .order('created_at', { ascending: false })
-  return data || []
+const { data: posts, pending, refresh } = await useAsyncData<PostWithAuthor[]>('posts', async () => {
+  error.value = ''
+  try {
+    const { data, error: fetchError } = await supabase
+      .from('posts')
+      .select('*, author:profiles(username)')
+      .order('created_at', { ascending: false })
+    
+    if (fetchError) {
+      error.value = fetchError.message
+      return []
+    }
+    
+    return data || []
+  } catch (e) {
+    error.value = 'Failed to load posts'
+    console.error('Error fetching posts:', e)
+    return []
+  }
 })
 </script>
 
@@ -58,12 +84,36 @@ const { data: posts, pending } = await useAsyncData('posts', async () => {
   margin-top: 40px;
 }
 
-.posts-section h2 {
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 13px;
 }
 
 .posts-grid {
   display: grid;
   gap: 20px;
+}
+
+.empty-state {
+  padding: 60px 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.empty-state p {
+  color: #666;
+  margin-bottom: 20px;
 }
 </style>

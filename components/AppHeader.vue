@@ -3,16 +3,20 @@
     <div class="container header-content">
       <NuxtLink to="/" class="logo">Comminit</NuxtLink>
       <nav class="nav">
-        <NuxtLink v-if="!user" to="/login" class="nav-link">Login</NuxtLink>
-        <NuxtLink v-if="!user" to="/register" class="nav-link">Register</NuxtLink>
-        <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary">New Post</NuxtLink>
-        <button v-if="user" @click="logout" class="nav-link">Logout</button>
+        <template v-if="!user">
+          <NuxtLink to="/login" class="nav-link">Login</NuxtLink>
+          <NuxtLink to="/register" class="nav-link">Register</NuxtLink>
+        </template>
+        <template v-else>
+          <NuxtLink to="/posts/new" class="btn btn-primary">New Post</NuxtLink>
+          <button @click="logout" class="nav-link">Logout</button>
+        </template>
       </nav>
     </div>
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
 
