@@ -105,15 +105,71 @@ export const usePostsStore = defineStore('posts', {
     },
 
     /**
+     * Ensure user has a profile, create one if missing
+     */
+    async ensureUserProfile(userId: string, email?: string, username?: string): Promise<boolean> {
+      const supabase = useSupabaseClient()
+
+      try {
+        // First, check if profile exists
+        const { data: profile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .single()
+
+        // If profile exists, return true
+        if (profile) return true
+
+        // If profile doesn't exist (fetchError indicates no rows), create one
+        if (fetchError?.code === 'PGRST116') {
+          // Create profile with username from user metadata or email
+          const profileUsername = username || 
+                               email?.split('@')[0] || 
+                               `user_${userId.substring(0, 8)}`
+          
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              username: profileUsername
+            })
+
+          if (insertError) {
+            console.error('Failed to create profile:', insertError)
+            return false
+          }
+
+          return true
+        }
+
+        // Other database error
+        console.error('Error checking profile:', fetchError)
+        return false
+      } catch (err) {
+        console.error('Error ensuring user profile:', err)
+        return false
+      }
+    },
+
+    /**
      * Create a new post
      */
-    async createPost(postData: PostForm, userId: string): Promise<ApiResponse<Post>> {
+    async createPost(postData: PostForm, userId: string, userEmail?: string, username?: string): Promise<ApiResponse<Post>> {
       this.loading = true
       this.error = null
 
       const supabase = useSupabaseClient()
 
       try {
+        // Ensure user has a profile before creating post
+        const hasProfile = await this.ensureUserProfile(userId, userEmail, username)
+        if (!hasProfile) {
+          const message = 'Cannot create post: user profile setup failed'
+          this.error = message
+          return { data: null, error: { message } }
+        }
+
         const { data, error } = await supabase
           .from('posts')
           .insert({

@@ -106,10 +106,35 @@ create policy "Users can delete own comments"
 -- Function to create profile on signup
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  username_value text;
 begin
+  -- Extract username from raw_user_meta_data
+  username_value := new.raw_user_meta_data->>'username';
+  
+  -- Check if username is provided
+  if username_value is null or trim(username_value) = '' then
+    -- Fallback to email prefix if username is not provided
+    username_value := split_part(new.email, '@', 1);
+  end if;
+  
+  -- Ensure username is unique by appending random number if needed
+  if exists (select 1 from public.profiles where username = username_value) then
+    username_value := username_value || '_' || floor(random() * 10000)::text;
+  end if;
+  
+  -- Insert profile
   insert into public.profiles (id, username)
-  values (new.id, new.raw_user_meta_data->>'username');
+  values (new.id, username_value)
+  on conflict (id) do update
+  set username = excluded.username;
+  
   return new;
+exception
+  when others then
+    -- Log error and continue (don't block user creation)
+    raise warning 'Failed to create profile for user %: %', new.id, sqlerrm;
+    return new;
 end;
 $$ language plpgsql security definer;
 
@@ -117,3 +142,28 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Function to ensure profile exists for existing users (one-time fix)
+create or replace function public.ensure_profiles_exist()
+returns void as $$
+declare
+  user_record record;
+begin
+  for user_record in 
+    select au.id, 
+           coalesce(au.raw_user_meta_data->>'username', split_part(au.email, '@', 1)) as username
+    from auth.users au
+    left join public.profiles p on au.id = p.id
+    where p.id is null
+  loop
+    begin
+      insert into public.profiles (id, username)
+      values (user_record.id, user_record.username)
+      on conflict (id) do nothing;
+    exception
+      when others then
+        raise warning 'Failed to create profile for existing user %: %', user_record.id, sqlerrm;
+    end;
+  end loop;
+end;
+$$ language plpgsql security definer;

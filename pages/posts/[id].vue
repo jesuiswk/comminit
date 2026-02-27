@@ -397,12 +397,19 @@ const formatDate = (date: string): string => {
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: rgba(255, 91, 139, 0.1);
+  color: var(--color-accent3);
+  border: 1px solid rgba(255, 91, 139, 0.3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-base);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: rgba(255, 91, 139, 0.2);
+  color: white;
+  border-color: var(--color-accent3);
 }
 
 .meta {

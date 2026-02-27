@@ -74,6 +74,55 @@ export function usePosts() {
   }
 
   /**
+   * Ensure user has a profile, create one if missing
+   * @returns Boolean indicating if profile exists or was created
+   */
+  async function ensureUserProfile(): Promise<boolean> {
+    if (!user.value) return false
+
+    try {
+      // First, check if profile exists
+      const { data: profile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.value.id)
+        .single()
+
+      // If profile exists, return true
+      if (profile) return true
+
+      // If profile doesn't exist (fetchError indicates no rows), create one
+      if (fetchError?.code === 'PGRST116') {
+        // Create profile with username from user metadata or email
+        const username = user.value.user_metadata?.username || 
+                         user.value.email?.split('@')[0] || 
+                         `user_${user.value.id.substring(0, 8)}`
+        
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.value.id,
+            username: username
+          })
+
+        if (insertError) {
+          console.error('Failed to create profile:', insertError)
+          return false
+        }
+
+        return true
+      }
+
+      // Other database error
+      console.error('Error checking profile:', fetchError)
+      return false
+    } catch (err) {
+      console.error('Error ensuring user profile:', err)
+      return false
+    }
+  }
+
+  /**
    * Create a new post
    * @param postData - Post form data
    * @returns Created post
@@ -84,6 +133,15 @@ export function usePosts() {
     }
 
     try {
+      // Ensure user has a profile before creating post
+      const hasProfile = await ensureUserProfile()
+      if (!hasProfile) {
+        return { 
+          data: null, 
+          error: { message: 'Cannot create post: user profile setup failed' } 
+        }
+      }
+
       const { data, error } = await supabase
         .from('posts')
         .insert({

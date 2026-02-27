@@ -75,49 +75,82 @@ const clearValidationErrors = () => {
   validationErrors.value = { title: '', content: '' }
 }
 
-const handleSubmit = async () => {
-  if (!user.value) {
-    error.value = 'You must be logged in to create a post'
-    return
-  }
-
-  loading.value = true
-  error.value = ''
-  clearValidationErrors()
-  
-  // Validate input using Zod schema
-  const validation: ValidationResult<PostForm> = validatePost({
-    title: title.value,
-    content: content.value
-  })
-  
-  if (!validation.success) {
-    error.value = validation.error || 'Validation failed'
-    loading.value = false
-    return
-  }
-  
-  try {
-    const { error: postError } = await supabase
-      .from('posts')
-      .insert({
-        title: title.value.trim(),
-        content: content.value.trim(),
-        user_id: user.value.id
-      })
-    
-    if (postError) {
-      error.value = postError.message
-    } else {
-      navigateTo('/')
+  const handleSubmit = async () => {
+    if (!user.value) {
+      error.value = 'You must be logged in to create a post'
+      return
     }
-  } catch (e) {
-    error.value = 'An unexpected error occurred. Please try again.'
-    console.error('Post creation error:', e)
-  } finally {
-    loading.value = false
+
+    loading.value = true
+    error.value = ''
+    clearValidationErrors()
+    
+    // Validate input using Zod schema
+    const validation: ValidationResult<PostForm> = validatePost({
+      title: title.value,
+      content: content.value
+    })
+    
+    if (!validation.success) {
+      error.value = validation.error || 'Validation failed'
+      loading.value = false
+      return
+    }
+    
+    try {
+      // First, ensure user has a profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.value.id)
+        .single()
+
+      // If profile doesn't exist, create one
+      if (profileError?.code === 'PGRST116') {
+        const username = user.value.user_metadata?.username || 
+                        user.value.email?.split('@')[0] || 
+                        `user_${user.value.id.substring(0, 8)}`
+        
+        const { error: createProfileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.value.id,
+            username: username
+          })
+
+        if (createProfileError) {
+          error.value = `Failed to create user profile: ${createProfileError.message}`
+          loading.value = false
+          return
+        }
+      } else if (profileError) {
+        // Other database error
+        error.value = `Database error: ${profileError.message}`
+        loading.value = false
+        return
+      }
+
+      // Now create the post
+      const { error: postError } = await supabase
+        .from('posts')
+        .insert({
+          title: title.value.trim(),
+          content: content.value.trim(),
+          user_id: user.value.id
+        })
+      
+      if (postError) {
+        error.value = postError.message
+      } else {
+        navigateTo('/')
+      }
+    } catch (e) {
+      error.value = 'An unexpected error occurred. Please try again.'
+      console.error('Post creation error:', e)
+    } finally {
+      loading.value = false
+    }
   }
-}
 </script>
 
 <style scoped>
