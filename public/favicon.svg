@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0D1120"/>
+      <stop offset="100%" style="stop-color:#131829"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3DFFE0"/>
+      <stop offset="100%" style="stop-color:#00C9A7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="32" height="2" rx="1" fill="url(#accent)" opacity="0.9"/>
+
+  <!-- "ci" text -->
+  <text
+    x="16"
+    y="22"
+    font-family="'JetBrains Mono', 'Courier New', monospace"
+    font-weight="800"
+    font-size="14"
+    fill="url(#accent)"
+    text-anchor="middle"
+    letter-spacing="-0.5"
+  >ci</text>
+</svg>
