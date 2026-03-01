@@ -42,8 +42,9 @@
       <div v-if="error" class="error">{{ error }}</div>
       <div class="form-actions">
         <NuxtLink to="/" class="btn btn-secondary">Cancel</NuxtLink>
-        <button type="submit" class="btn btn-primary" :disabled="loading || !title.trim() || !content.trim()">
-          {{ loading ? 'Publishing...' : 'Publish' }}
+        <button type="submit" class="btn btn-primary" :disabled="loading || !title.trim() || !content.trim()" :class="{ 'btn-loading': loading }">
+          <span v-if="!loading">Publish</span>
+          <span v-else class="sr-only">Publishing...</span>
         </button>
       </div>
     </form>

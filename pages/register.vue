@@ -45,8 +45,9 @@
         </small>
       </div>
       <div v-if="error" class="error">{{ error }}</div>
-      <button type="submit" class="btn btn-primary" :disabled="loading">
-        {{ loading ? 'Creating account...' : 'Register' }}
+      <button type="submit" class="btn btn-primary" :disabled="loading" :class="{ 'btn-loading': loading }">
+        <span v-if="!loading">Register</span>
+        <span v-else class="sr-only">Creating account...</span>
       </button>
     </form>
     <p class="mt-4 text-center">

@@ -29,8 +29,9 @@
         </div>
       </div>
       <div v-if="error" class="error">{{ error }}</div>
-      <button type="submit" class="btn btn-primary" :disabled="loading">
-        {{ loading ? 'Logging in...' : 'Login' }}
+      <button type="submit" class="btn btn-primary" :disabled="loading" :class="{ 'btn-loading': loading }">
+        <span v-if="!loading">Login</span>
+        <span v-else class="sr-only">Logging in...</span>
       </button>
     </form>
     <p class="mt-4 text-center">
