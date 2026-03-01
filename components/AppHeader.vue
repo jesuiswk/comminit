@@ -33,7 +33,22 @@
             </svg>
             $ new_post
           </NuxtLink>
+          
+          <!-- User Avatar and Settings -->
           <div class="user-menu">
+            <NuxtLink to="/settings" class="user-avatar-link">
+              <div class="user-avatar" v-if="userProfile?.avatar_url">
+                <img 
+                  :src="userProfile.avatar_url" 
+                  :alt="userProfile?.username || 'User'" 
+                  class="user-avatar-image"
+                />
+              </div>
+              <div v-else class="user-avatar icon-box">
+                {{ userInitial }}
+              </div>
+            </NuxtLink>
+            
             <button @click="logout" class="btn-logout font-mono">
               <span class="arrow">[→</span>
               <span class="slash">//</span>
@@ -48,12 +63,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import type { Profile } from '~/types'
 
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
 
 const theme = ref<'dark' | 'light'>('dark')
+const userProfile = ref<Profile | null>(null)
 
 onMounted(() => {
   const savedTheme = localStorage.getItem('comminit-theme') as 'dark' | 'light' | null
@@ -64,7 +81,47 @@ onMounted(() => {
     // Default to dark theme
     document.documentElement.setAttribute('data-theme', 'dark')
   }
+  
+  if (user.value) {
+    fetchUserProfile()
+  }
 })
+
+// Watch for user changes
+watch(user, (newUser) => {
+  if (newUser) {
+    fetchUserProfile()
+  } else {
+    userProfile.value = null
+  }
+})
+
+const userInitial = computed(() => {
+  if (!user.value) return 'U'
+  const username = user.value.user_metadata?.username || user.value.email || 'U'
+  return username.charAt(0).toUpperCase()
+})
+
+const fetchUserProfile = async () => {
+  if (!user.value) {
+    userProfile.value = null
+    return
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.value.id)
+      .single()
+    
+    if (error) throw error
+    userProfile.value = data
+  } catch (error) {
+    console.error('Error fetching user profile:', error)
+    userProfile.value = null
+  }
+}
 
 const toggleTheme = () => {
   const newTheme = theme.value === 'dark' ? 'light' : 'dark'
@@ -209,6 +266,84 @@ const logout = async () => {
 
 .theme-toggle:hover .icon {
   transform: rotate(12deg);
+}
+
+/* User Menu */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+}
+
+.user-avatar-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.user-avatar-link:hover {
+  transform: scale(1.05);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-accent);
+  color: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.user-avatar-link:hover .user-avatar {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-md);
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-full);
+}
+
+.btn-logout {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.btn-logout:hover {
+  color: var(--color-accent);
+  background: rgba(61, 255, 224, 0.1);
+}
+
+.btn-logout .arrow {
+  color: var(--color-accent);
+  font-weight: 800;
+}
+
+.btn-logout .slash {
+  color: var(--color-accent2);
+  font-weight: 600;
 }
 
 /* Responsive Design */

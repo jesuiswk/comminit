@@ -16,8 +16,15 @@
     <!-- Footer with author info and stats -->
     <div class="post-footer">
       <div class="author-info">
-        <!-- Author avatar with gradient -->
-        <div class="author-avatar icon-box" style="width: 36px; height: 36px; font-size: var(--text-sm);">
+        <!-- Author avatar with gradient or profile picture -->
+        <div class="author-avatar" v-if="post.author?.avatar_url">
+          <img 
+            :src="post.author.avatar_url" 
+            :alt="post.author?.username || 'User'" 
+            class="author-avatar-image"
+          />
+        </div>
+        <div v-else class="author-avatar icon-box" style="width: 36px; height: 36px; font-size: var(--text-sm);">
           {{ (post.author?.username || 'U').charAt(0).toUpperCase() }}
         </div>
         <div class="author-details">
@@ -155,6 +162,14 @@ const formatDate = (date: string): string => {
   font-size: var(--text-sm);
   font-family: var(--font-mono);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.author-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-full);
 }
 
 .author-details {

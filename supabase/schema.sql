@@ -7,6 +7,7 @@ alter table auth.users enable row level security;
 create table profiles (
   id uuid references auth.users on delete cascade primary key,
   username text unique not null,
+  avatar_url text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
