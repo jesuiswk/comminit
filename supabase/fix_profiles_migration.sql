@@ -36,6 +36,19 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- 1.5 Add missing INSERT policy for profiles if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'profiles' 
+    AND policyname = 'Authenticated users can create own profile'
+  ) THEN
+    CREATE POLICY "Authenticated users can create own profile"
+      ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+  END IF;
+END $$;
+
 -- 2. Create the ensure_profiles_exist function for existing users
 CREATE OR REPLACE FUNCTION public.ensure_profiles_exist()
 RETURNS void AS $$

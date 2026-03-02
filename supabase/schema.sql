@@ -65,11 +65,14 @@ create trigger update_comments_updated_at
 
 -- RLS Policies
 
--- Profiles: users can read all, update own
+-- Profiles: users can read all, create own, update own
 alter table profiles enable row level security;
 
 create policy "Profiles are viewable by everyone"
   on profiles for select using (true);
+
+create policy "Authenticated users can create own profile"
+  on profiles for insert with check (auth.uid() = id);
 
 create policy "Users can update own profile"
   on profiles for update using (auth.uid() = id);
