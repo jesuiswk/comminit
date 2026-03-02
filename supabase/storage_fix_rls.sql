@@ -111,34 +111,82 @@ END $$;
 -- ===================================================================
 
 -- Policy 1: Allow public read access (so profile pictures are publicly viewable)
-CREATE POLICY IF NOT EXISTS "Public can view profile pictures"
-ON storage.objects FOR SELECT
-USING (bucket_id = 'profile-pictures');
+DO $$ 
+BEGIN
+  -- Check if policy already exists
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'objects' 
+      AND schemaname = 'storage' 
+      AND policyname = 'Public can view profile pictures'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Public can view profile pictures" ON storage.objects FOR SELECT USING (bucket_id = ''profile-pictures'')';
+    RAISE NOTICE '✅ Created policy: Public can view profile pictures';
+  ELSE
+    RAISE NOTICE '✅ Policy already exists: Public can view profile pictures';
+  END IF;
+EXCEPTION
+  WHEN others THEN
+    RAISE NOTICE '❌ Error creating policy: %', SQLERRM;
+END $$;
 
 -- Policy 2: Allow ANY authenticated user to upload ANY file to this bucket
 -- This is permissive for testing - we'll restrict it later
-CREATE POLICY IF NOT EXISTS "Authenticated users can upload to profile-pictures"
-ON storage.objects FOR INSERT
-WITH CHECK (
-  bucket_id = 'profile-pictures' 
-  AND auth.role() = 'authenticated'
-);
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'objects' 
+      AND schemaname = 'storage' 
+      AND policyname = 'Authenticated users can upload to profile-pictures'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Authenticated users can upload to profile-pictures" ON storage.objects FOR INSERT WITH CHECK (bucket_id = ''profile-pictures'' AND auth.role() = ''authenticated'')';
+    RAISE NOTICE '✅ Created policy: Authenticated users can upload to profile-pictures';
+  ELSE
+    RAISE NOTICE '✅ Policy already exists: Authenticated users can upload to profile-pictures';
+  END IF;
+EXCEPTION
+  WHEN others THEN
+    RAISE NOTICE '❌ Error creating policy: %', SQLERRM;
+END $$;
 
 -- Policy 3: Allow users to update any file in the bucket (temporary for testing)
-CREATE POLICY IF NOT EXISTS "Authenticated users can update files"
-ON storage.objects FOR UPDATE
-USING (
-  bucket_id = 'profile-pictures' 
-  AND auth.role() = 'authenticated'
-);
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'objects' 
+      AND schemaname = 'storage' 
+      AND policyname = 'Authenticated users can update files'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Authenticated users can update files" ON storage.objects FOR UPDATE USING (bucket_id = ''profile-pictures'' AND auth.role() = ''authenticated'')';
+    RAISE NOTICE '✅ Created policy: Authenticated users can update files';
+  ELSE
+    RAISE NOTICE '✅ Policy already exists: Authenticated users can update files';
+  END IF;
+EXCEPTION
+  WHEN others THEN
+    RAISE NOTICE '❌ Error creating policy: %', SQLERRM;
+END $$;
 
 -- Policy 4: Allow users to delete any file in the bucket (temporary for testing)
-CREATE POLICY IF NOT EXISTS "Authenticated users can delete files"
-ON storage.objects FOR DELETE
-USING (
-  bucket_id = 'profile-pictures' 
-  AND auth.role() = 'authenticated'
-);
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE tablename = 'objects' 
+      AND schemaname = 'storage' 
+      AND policyname = 'Authenticated users can delete files'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Authenticated users can delete files" ON storage.objects FOR DELETE USING (bucket_id = ''profile-pictures'' AND auth.role() = ''authenticated'')';
+    RAISE NOTICE '✅ Created policy: Authenticated users can delete files';
+  ELSE
+    RAISE NOTICE '✅ Policy already exists: Authenticated users can delete files';
+  END IF;
+EXCEPTION
+  WHEN others THEN
+    RAISE NOTICE '❌ Error creating policy: %', SQLERRM;
+END $$;
 
 RAISE NOTICE '✅ Created simplified policies for testing';
 
