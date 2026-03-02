@@ -231,14 +231,14 @@ const applyCrop = async () => {
     uploadError.value = `Uploading image (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB)...`
     
     // Upload to Supabase Storage
-    const { error: uploadError } = await supabase.storage
+    const { error: storageUploadError } = await supabase.storage
       .from('profile-pictures')
       .upload(filePath, fileToUpload, {
         cacheControl: '3600',
         upsert: true
       })
     
-    if (uploadError) throw uploadError
+    if (storageUploadError) throw storageUploadError
     
     // Get public URL
     const { data: urlData } = supabase.storage
@@ -248,12 +248,12 @@ const applyCrop = async () => {
     const avatarUrl = urlData.publicUrl
     
     // Update profile with avatar URL
-    const { error: updateError } = await supabase
+    const { error: profileUpdateError } = await supabase
       .from('profiles')
       .update({ avatar_url: avatarUrl })
       .eq('id', user.value.id)
     
-    if (updateError) throw updateError
+    if (profileUpdateError) throw profileUpdateError
     
     // Update preview
     previewUrl.value = avatarUrl
