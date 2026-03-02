@@ -58,7 +58,7 @@
       </div>
     </div>
     
-    <div v-if="uploadError" class="error mt-2">{{ uploadError }}</div>
+    <div v-if="uploadError" :class="uploadError.startsWith('Note:') || uploadError.startsWith('Image compressed:') || uploadError.startsWith('Compressing') || uploadError.startsWith('Uploading') ? 'warning mt-2' : 'error mt-2'">{{ uploadError }}</div>
     <div v-if="uploadSuccess" class="success mt-2">{{ uploadSuccess }}</div>
     
     <!-- Image cropping modal (simplified implementation) -->
@@ -102,6 +102,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useSupabaseClient } from '#imports'
 import { useSupabaseUser } from '#imports'
+import imageCompression from 'browser-image-compression'
 
 interface Props {
   currentAvatarUrl?: string | null
@@ -146,18 +147,19 @@ const handleFileSelect = (event: Event) => {
     return
   }
   
-  // Validate file size (5MB max)
-  if (file.size > 5 * 1024 * 1024) {
-    uploadError.value = 'Image must be less than 5MB'
-    return
+  // Warn about large files but allow them (they'll be compressed)
+  if (file.size > 10 * 1024 * 1024) {
+    uploadError.value = 'Note: Large images will be compressed for optimal performance'
   }
   
   selectedFile.value = file
   selectedFileUrl.value = URL.createObjectURL(file)
   previewUrl.value = selectedFileUrl.value
   
-  // Reset messages
-  uploadError.value = ''
+  // Reset messages (keep warning if set)
+  if (uploadError.value !== 'Note: Large images will be compressed for optimal performance') {
+    uploadError.value = ''
+  }
   uploadSuccess.value = ''
   
   // Show crop modal for new images
@@ -178,6 +180,34 @@ const cropImage = () => {
   showCropModal.value = true
 }
 
+const compressImage = async (file: File): Promise<File> => {
+  try {
+    // Compression options
+    const options = {
+      maxSizeMB: 2, // Maximum size in MB (well under 5MB limit)
+      maxWidthOrHeight: 800, // Maximum width or height
+      useWebWorker: true, // Use web worker for better performance
+      fileType: file.type, // Keep original file type
+      initialQuality: 0.8, // Initial quality (0.8 = 80%)
+    }
+    
+    // Show compression status
+    uploadError.value = 'Compressing image for optimal performance...'
+    
+    const compressedFile = await imageCompression(file, options)
+    
+    // Show compression results
+    const reduction = ((file.size - compressedFile.size) / file.size * 100).toFixed(1)
+    uploadError.value = `Image compressed: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB (${reduction}% reduction)`
+    
+    return compressedFile
+  } catch (error) {
+    console.error('Image compression failed:', error)
+    // If compression fails, return original file
+    return file
+  }
+}
+
 const applyCrop = async () => {
   if (!selectedFile.value || !user.value) return
   
@@ -186,15 +216,24 @@ const applyCrop = async () => {
   showCropModal.value = false
   
   try {
+    // Compress image before upload (if it's large)
+    let fileToUpload = selectedFile.value
+    if (selectedFile.value.size > 1024 * 1024) { // Compress if > 1MB
+      fileToUpload = await compressImage(selectedFile.value)
+    }
+    
     // Generate unique filename
-    const fileExt = selectedFile.value.name.split('.').pop()
+    const fileExt = fileToUpload.name.split('.').pop() || 'jpg'
     const fileName = `${user.value.id}-${Date.now()}.${fileExt}`
     const filePath = `avatars/${fileName}`
+    
+    // Show uploading status
+    uploadError.value = `Uploading image (${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB)...`
     
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('profile-pictures')
-      .upload(filePath, selectedFile.value, {
+      .upload(filePath, fileToUpload, {
         cacheControl: '3600',
         upsert: true
       })
@@ -224,6 +263,7 @@ const applyCrop = async () => {
     
     // Show success message
     uploadSuccess.value = 'Profile picture updated successfully!'
+    uploadError.value = '' // Clear any compression/upload messages
     
   } catch (error: any) {
     console.error('Error uploading image:', error)
@@ -456,6 +496,16 @@ onMounted(() => {
   background: rgba(61, 255, 224, 0.1);
   border-radius: var(--radius-md);
   border: 1px solid rgba(61, 255, 224, 0.3);
+}
+
+.warning {
+  color: #ff9800;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: var(--space-sm);
+  background: rgba(255, 152, 0, 0.1);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 152, 0, 0.3);
 }
 
 .error {
