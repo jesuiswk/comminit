@@ -50,6 +50,15 @@ definePageMeta({
   auth: { guestOnly: true }
 })
 
+// SEO Meta
+useSeoMeta({
+  title: 'Login · comminit',
+  description: 'Sign in to comminit, a modern open‑source platform for meaningful discussions.',
+  ogTitle: 'Login · comminit',
+  ogDescription: 'Sign in to comminit, a modern open‑source platform for meaningful discussions.',
+  robots: 'noindex, nofollow',
+})
+
 const supabase = useSupabaseClient()
 const email = ref('')
 const password = ref('')

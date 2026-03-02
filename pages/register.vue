@@ -66,6 +66,15 @@ definePageMeta({
   auth: { guestOnly: true }
 })
 
+// SEO Meta
+useSeoMeta({
+  title: 'Register · comminit',
+  description: 'Create an account on comminit, a modern open‑source platform for meaningful discussions.',
+  ogTitle: 'Register · comminit',
+  ogDescription: 'Create an account on comminit, a modern open‑source platform for meaningful discussions.',
+  robots: 'noindex, nofollow',
+})
+
 const supabase = useSupabaseClient()
 const username = ref('')
 const email = ref('')

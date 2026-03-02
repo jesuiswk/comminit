@@ -94,6 +94,20 @@ const { data: posts, pending, refresh } = await useAsyncData<PostWithAuthor[]>('
     return []
   }
 })
+
+// SEO Meta
+useSeoMeta({
+  title: 'comminit · initialize communication',
+  description: 'A modern, open‑source platform for meaningful discussions. Build, ship, and connect with developers worldwide.',
+  ogTitle: 'comminit · initialize communication',
+  ogDescription: 'A modern, open‑source platform for meaningful discussions. Build, ship, and connect with developers worldwide.',
+  ogImage: '/og-image.png',
+  ogImageAlt: 'comminit platform',
+  twitterCard: 'summary_large_image',
+  twitterTitle: 'comminit · initialize communication',
+  twitterDescription: 'A modern, open‑source platform for meaningful discussions',
+  twitterImage: '/og-image.png',
+})
 </script>
 
 <style scoped>

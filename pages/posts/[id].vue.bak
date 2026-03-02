@@ -368,35 +368,6 @@ const deleteComment = async (commentId: string) => {
   }
 }
 
-// SEO Meta
-const seoTitle = computed(() => {
-  if (post.value?.title) {
-    return `${post.value.title} · comminit`
-  }
-  return 'comminit · initialize communication'
-})
-
-const seoDescription = computed(() => {
-  if (post.value?.content) {
-    const excerpt = post.value.content.substring(0, 155).trim()
-    return `${excerpt}${post.value.content.length > 155 ? '...' : ''}`
-  }
-  return 'A modern, open‑source platform for meaningful discussions'
-})
-
-useSeoMeta({
-  title: seoTitle,
-  ogTitle: seoTitle,
-  description: seoDescription,
-  ogDescription: seoDescription,
-  ogImage: '/og-image.png',
-  ogImageAlt: 'comminit platform',
-  twitterCard: 'summary_large_image',
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  twitterImage: '/og-image.png',
-})
-
 const formatDate = (date: string): string => {
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
