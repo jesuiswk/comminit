@@ -7,6 +7,8 @@ interface PostsState {
   currentPost: PostWithAuthor | null
   loading: boolean
   error: string | null
+  lastFetchTime: number | null
+  cacheTTL: number // Cache time-to-live in milliseconds (5 minutes)
 }
 
 /**
@@ -17,7 +19,9 @@ export const usePostsStore = defineStore('posts', {
     posts: [],
     currentPost: null,
     loading: false,
-    error: null
+    error: null,
+    lastFetchTime: null,
+    cacheTTL: 5 * 60 * 1000 // 5 minutes in milliseconds
   }),
 
   getters: {
@@ -31,13 +35,23 @@ export const usePostsStore = defineStore('posts', {
 
   actions: {
     /**
-     * Fetch all posts
+     * Fetch all posts with caching
      */
     async fetchPosts(options?: { 
       limit?: number 
       orderBy?: 'created_at' | 'updated_at'
       ascending?: boolean 
+      forceRefresh?: boolean
     }): Promise<ApiResponse<PostWithAuthor[]>> {
+      // Check cache first (unless force refresh)
+      const now = Date.now()
+      const hasFreshCache = this.lastFetchTime && (now - this.lastFetchTime < this.cacheTTL)
+      
+      if (!options?.forceRefresh && hasFreshCache && this.posts.length > 0) {
+        // Return cached data immediately
+        return { data: this.posts, error: null }
+      }
+
       this.loading = true
       this.error = null
 
@@ -63,6 +77,8 @@ export const usePostsStore = defineStore('posts', {
         }
 
         this.posts = data || []
+        this.lastFetchTime = now
+        
         return { data: this.posts, error: null }
       } catch (err) {
         const message = 'Failed to fetch posts'
@@ -74,9 +90,19 @@ export const usePostsStore = defineStore('posts', {
     },
 
     /**
-     * Fetch a single post by ID
+     * Fetch a single post by ID with caching
      */
-    async fetchPostById(id: string): Promise<ApiResponse<PostWithAuthor>> {
+    async fetchPostById(id: string, forceRefresh?: boolean): Promise<ApiResponse<PostWithAuthor>> {
+      // Check cache first (unless force refresh)
+      const cachedPost = this.posts.find(post => post.id === id)
+      const now = Date.now()
+      const hasFreshCache = this.lastFetchTime && (now - this.lastFetchTime < this.cacheTTL)
+      
+      if (!forceRefresh && cachedPost && hasFreshCache) {
+        this.currentPost = cachedPost
+        return { data: cachedPost, error: null }
+      }
+
       this.loading = true
       this.error = null
 
@@ -95,6 +121,13 @@ export const usePostsStore = defineStore('posts', {
         }
 
         this.currentPost = data
+        
+        // Update cache if post exists in posts array
+        const index = this.posts.findIndex(p => p.id === id)
+        if (index !== -1) {
+          this.posts[index] = data
+        }
+        
         return { data, error: null }
       } catch (err) {
         const message = 'Failed to fetch post'

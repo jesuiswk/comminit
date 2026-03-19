@@ -62,21 +62,14 @@ export function useSearch() {
     offset: number
   ): Promise<ApiResponse<PaginatedResponse<PostWithAuthor>>> {
     try {
-      // First, get total count
-      const { count, error: countError } = await supabase
+      // Use full-text search with textSearch
+      const { data, error, count } = await supabase
         .from('posts')
-        .select('*', { count: 'exact', head: true })
-        .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
-
-      if (countError) {
-        return createErrorResponse(handleSupabaseError(countError, 'Failed to count posts'))
-      }
-
-      // Then fetch paginated data with author info
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*, author:profiles(*)')
-        .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+        .select('*, author:profiles(*)', { count: 'exact' })
+        .textSearch('search_vector', query, {
+          type: 'websearch',
+          config: 'english'
+        })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
@@ -166,21 +159,14 @@ export function useSearch() {
     offset: number
   ): Promise<ApiResponse<PaginatedResponse<CommentWithAuthor>>> {
     try {
-      // First, get total count
-      const { count, error: countError } = await supabase
+      // Use full-text search with textSearch
+      const { data, error, count } = await supabase
         .from('comments')
-        .select('*', { count: 'exact', head: true })
-        .ilike('content', `%${query}%`)
-
-      if (countError) {
-        return createErrorResponse(handleSupabaseError(countError, 'Failed to count comments'))
-      }
-
-      // Then fetch paginated data with author info
-      const { data, error } = await supabase
-        .from('comments')
-        .select('*, author:profiles(*)')
-        .ilike('content', `%${query}%`)
+        .select('*, author:profiles(*)', { count: 'exact' })
+        .textSearch('search_vector', query, {
+          type: 'websearch',
+          config: 'english'
+        })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
@@ -225,12 +211,15 @@ export function useSearch() {
         })
       }
 
-      // Fetch limited suggestions from each category
+      // Fetch limited suggestions from each category using full-text search
       const [postsResult, usersResult, commentsResult] = await Promise.all([
         supabase
           .from('posts')
           .select('*, author:profiles(*)')
-          .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+          .textSearch('search_vector', query, {
+            type: 'websearch',
+            config: 'english'
+          })
           .limit(3),
         supabase
           .from('profiles')
@@ -240,7 +229,10 @@ export function useSearch() {
         supabase
           .from('comments')
           .select('*, author:profiles(*)')
-          .ilike('content', `%${query}%`)
+          .textSearch('search_vector', query, {
+            type: 'websearch',
+            config: 'english'
+          })
           .limit(3)
       ])
 

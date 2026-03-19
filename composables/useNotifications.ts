@@ -29,25 +29,13 @@ export function useNotifications() {
       const orderBy = params.orderBy || 'created_at'
       const ascending = params.ascending ?? false
 
-      // First, get total count
-      const { count, error: countError } = await supabase
+      // Combine count and data into single query
+      const { data, error, count } = await supabase
         .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.value.id)
-
-      if (countError) {
-        return createErrorResponse(handleSupabaseError(countError, 'Failed to count notifications'))
-      }
-
-      // Then fetch paginated data
-      let query = supabase
-        .from('notifications')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('user_id', user.value.id)
         .order(orderBy, { ascending })
         .range(offset, offset + limit - 1)
-
-      const { data, error } = await query
 
       if (error) {
         return createErrorResponse(handleSupabaseError(error, 'Failed to fetch notifications'))

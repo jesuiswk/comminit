@@ -25,23 +25,12 @@ export function usePosts() {
       const orderBy = params.orderBy || 'created_at'
       const ascending = params.ascending ?? false
 
-      // First, get total count
-      const { count, error: countError } = await supabase
+      // Combine count and data into single query
+      const { data, error, count } = await supabase
         .from('posts')
-        .select('*', { count: 'exact', head: true })
-
-      if (countError) {
-        return createErrorResponse(handleSupabaseError(countError, 'Failed to count posts'))
-      }
-
-      // Then fetch paginated data with author info
-      let query = supabase
-        .from('posts')
-        .select('*, author:profiles(*)')
+        .select('*, author:profiles(*)', { count: 'exact' })
         .order(orderBy, { ascending })
         .range(offset, offset + limit - 1)
-
-      const { data, error } = await query
 
       if (error) {
         return createErrorResponse(handleSupabaseError(error, 'Failed to fetch posts'))
