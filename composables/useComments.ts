@@ -1,3 +1,4 @@
+import type { Database } from '~/types/supabase'
 import type { Comment, CommentWithAuthor, CommentForm, ApiResponse } from '~/types'
 
 /**
@@ -5,8 +6,9 @@ import type { Comment, CommentWithAuthor, CommentForm, ApiResponse } from '~/typ
  * Abstracts Supabase calls for comments
  */
 export function useComments() {
-  const supabase = useSupabaseClient()
+  const supabase = useSupabaseClient<Database>()
   const user = useSupabaseUser()
+  const { handleSupabaseError, createSuccessResponse, createErrorResponse } = useErrorHandling()
 
   /**
    * Fetch comments for a specific post
@@ -19,21 +21,18 @@ export function useComments() {
     try {
       const { data, error } = await supabase
         .from('comments')
-        .select('*, author:profiles(username)')
+        .select('*, author:profiles(*)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to fetch comments'))
       }
 
-      return { data: data || [], error: null }
+      return createSuccessResponse(data || [])
     } catch (err) {
       console.error('Error fetching comments:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to fetch comments' } 
-      }
+      return createErrorResponse<CommentWithAuthor[]>(err, 'Failed to fetch comments')
     }
   }
 
@@ -46,18 +45,15 @@ export function useComments() {
     commentData: CommentForm
   ): Promise<ApiResponse<Comment>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<Comment>('User must be logged in')
     }
 
     try {
-      const insertData: Record<string, string> = {
+      const insertData = {
         post_id: commentData.post_id,
         content: commentData.content.trim(),
-        user_id: user.value.id
-      }
-
-      if (commentData.parent_comment_id) {
-        insertData.parent_comment_id = commentData.parent_comment_id
+        user_id: user.value.id,
+        parent_comment_id: commentData.parent_comment_id || null
       }
 
       const { data, error } = await supabase
@@ -67,16 +63,13 @@ export function useComments() {
         .single()
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to create comment'))
       }
 
-      return { data, error: null }
+      return createSuccessResponse(data)
     } catch (err) {
       console.error('Error creating comment:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to create comment' } 
-      }
+      return createErrorResponse<Comment>(err, 'Failed to create comment')
     }
   }
 
@@ -91,7 +84,7 @@ export function useComments() {
     content: string
   ): Promise<ApiResponse<Comment>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<Comment>('User must be logged in')
     }
 
     try {
@@ -104,16 +97,13 @@ export function useComments() {
         .single()
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to update comment'))
       }
 
-      return { data, error: null }
+      return createSuccessResponse(data)
     } catch (err) {
       console.error('Error updating comment:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to update comment' } 
-      }
+      return createErrorResponse<Comment>(err, 'Failed to update comment')
     }
   }
 
@@ -124,7 +114,7 @@ export function useComments() {
    */
   async function deleteComment(id: string): Promise<ApiResponse<boolean>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<boolean>('User must be logged in')
     }
 
     try {
@@ -135,16 +125,13 @@ export function useComments() {
         .eq('user_id', user.value.id) // Ensure user owns the comment
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to delete comment'))
       }
 
-      return { data: true, error: null }
+      return createSuccessResponse(true)
     } catch (err) {
       console.error('Error deleting comment:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to delete comment' } 
-      }
+      return createErrorResponse<boolean>(err, 'Failed to delete comment')
     }
   }
 

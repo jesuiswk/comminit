@@ -11,7 +11,7 @@
         </div>
         <img 
           v-else 
-          :src="previewUrl || currentAvatarUrl" 
+          :src="previewUrl || currentAvatarUrl || ''" 
           alt="Profile picture" 
           class="avatar-image"
           :style="{ width: '150px', height: '150px' }"
@@ -103,6 +103,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useSupabaseClient } from '#imports'
 import { useSupabaseUser } from '#imports'
 import imageCompression from 'browser-image-compression'
+import type { Database } from '~/types/supabase'
 
 interface Props {
   currentAvatarUrl?: string | null
@@ -114,7 +115,7 @@ const emit = defineEmits<{
   'avatar-updated': [avatarUrl: string]
 }>()
 
-const supabase = useSupabaseClient()
+const supabase = useSupabaseClient<Database>()
 const user = useSupabaseUser()
 
 const uploading = ref(false)
@@ -247,11 +248,11 @@ const applyCrop = async () => {
     
     const avatarUrl = urlData.publicUrl
     
-    // Update profile with avatar URL
-    const { error: profileUpdateError } = await supabase
-      .from('profiles')
-      .update({ avatar_url: avatarUrl })
-      .eq('id', user.value.id)
+      // Update profile with avatar URL
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.value.id)
     
     if (profileUpdateError) throw profileUpdateError
     

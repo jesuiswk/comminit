@@ -55,12 +55,13 @@
 import { ref } from 'vue'
 import { validatePost } from '~/composables/useValidation'
 import type { ValidationResult, PostForm } from '~/types'
+import type { Database } from '~/types/supabase'
 
 definePageMeta({
   middleware: 'auth'
 })
 
-const supabase = useSupabaseClient()
+const supabase = useSupabaseClient<Database>()
 const user = useSupabaseUser()
 
 const title = ref('')

@@ -35,10 +35,11 @@ export interface Post {
   created_at: string
   updated_at?: string
   author?: Profile
+  category?: string
 }
 
-export interface PostWithAuthor extends Post {
-  author: Profile
+export interface PostWithAuthor extends Omit<Post, 'author'> {
+  author: Partial<Profile>
 }
 
 // ============================================================================
@@ -56,8 +57,8 @@ export interface Comment {
   author?: Profile
 }
 
-export interface CommentWithAuthor extends Comment {
-  author: Profile
+export interface CommentWithAuthor extends Omit<Comment, 'author'> {
+  author: Partial<Profile>
 }
 
 // ============================================================================
@@ -113,6 +114,56 @@ export interface ValidationResult<T> {
 }
 
 // ============================================================================
+// Notification Types
+// ============================================================================
+
+export interface Notification {
+  id: string
+  user_id: string
+  type: string
+  title: string
+  content?: string | null
+  data?: any
+  read: boolean
+  created_at: string
+  updated_at?: string | null
+}
+
+export type NotificationType = 'comment' | 'like' | 'follow' | 'system' | 'mention'
+
+// ============================================================================
+// Pagination Types
+// ============================================================================
+
+export interface PaginationParams {
+  page?: number
+  limit?: number
+  orderBy?: string
+  ascending?: boolean
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPrevPage: boolean
+}
+
+// ============================================================================
+// Search Types
+// ============================================================================
+
+export interface SearchParams {
+  query: string
+  type?: 'posts' | 'users' | 'comments'
+  page?: number
+  limit?: number
+}
+
+// ============================================================================
 // Component Prop Types
 // ============================================================================
 
@@ -126,3 +177,15 @@ export interface CommentProps {
   onEdit?: (comment: Comment) => void
   onDelete?: (commentId: string) => void
 }
+
+// ============================================================================
+// Route Meta Types
+// ============================================================================
+
+declare module '#app' {
+  interface PageMeta {
+    guestOnly?: boolean
+  }
+}
+
+export {}

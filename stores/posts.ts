@@ -1,3 +1,4 @@
+import type { Database } from '~/types/supabase'
 import { defineStore } from 'pinia'
 import type { Post, PostWithAuthor, PostForm, ApiResponse } from '~/types'
 
@@ -40,12 +41,12 @@ export const usePostsStore = defineStore('posts', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         let query = supabase
           .from('posts')
-          .select('*, author:profiles(username)')
+          .select('*, author:profiles(*)')
           .order(options?.orderBy || 'created_at', { 
             ascending: options?.ascending ?? false 
           })
@@ -79,12 +80,12 @@ export const usePostsStore = defineStore('posts', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         const { data, error } = await supabase
           .from('posts')
-          .select('*, author:profiles(username)')
+          .select('*, author:profiles(*)')
           .eq('id', id)
           .single()
 
@@ -108,7 +109,7 @@ export const usePostsStore = defineStore('posts', {
      * Ensure user has a profile, create one if missing
      */
     async ensureUserProfile(userId: string, email?: string, username?: string): Promise<boolean> {
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         // First, check if profile exists
@@ -159,7 +160,7 @@ export const usePostsStore = defineStore('posts', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         // Ensure user has a profile before creating post
@@ -209,7 +210,7 @@ export const usePostsStore = defineStore('posts', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         const updates: Record<string, string> = {}
@@ -255,7 +256,7 @@ export const usePostsStore = defineStore('posts', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         const { error } = await supabase

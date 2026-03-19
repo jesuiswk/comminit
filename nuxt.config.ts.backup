@@ -15,8 +15,7 @@ export default defineNuxtConfig({
       supabaseKey: process.env.SUPABASE_KEY,
     }
   },
-  // @ts-ignore
-site: {
+  site: {
     url: process.env.SITE_URL || 'https://comminit.example.com',
     name: 'comminit',
     description: 'A modern, open‑source platform for meaningful discussions',

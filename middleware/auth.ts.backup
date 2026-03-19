@@ -8,8 +8,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
   }
 
   // Guest only (login/register pages)
-  // @ts-ignore
-if (authConfig?.guestOnly && user.value) {
+  if (authConfig?.guestOnly && user.value) {
     return navigateTo('/')
   }
 })

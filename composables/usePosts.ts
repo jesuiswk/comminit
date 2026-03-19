@@ -1,48 +1,69 @@
-import type { Post, PostWithAuthor, PostForm, ApiResponse } from '~/types'
+import type { Database } from '~/types/supabase'
+import type { Post, PostWithAuthor, PostForm, ApiResponse, PaginationParams, PaginatedResponse } from '~/types'
 
 /**
  * Composable for post data operations
  * Abstracts Supabase calls for posts
  */
 export function usePosts() {
-  const supabase = useSupabaseClient()
+  const supabase = useSupabaseClient<Database>()
   const user = useSupabaseUser()
+  const { handleSupabaseError, createSuccessResponse, createErrorResponse } = useErrorHandling()
 
   /**
-   * Fetch all posts with author information
-   * @param options - Optional query parameters
-   * @returns Array of posts with author data
+   * Fetch posts with author information and pagination
+   * @param params - Pagination parameters
+   * @returns Paginated posts response
    */
-  async function fetchPosts(options?: { 
-    limit?: number 
-    orderBy?: 'created_at' | 'updated_at'
-    ascending?: boolean 
-  }): Promise<ApiResponse<PostWithAuthor[]>> {
+  async function fetchPosts(
+    params: PaginationParams = {}
+  ): Promise<ApiResponse<PaginatedResponse<PostWithAuthor>>> {
     try {
+      const page = params.page || 1
+      const limit = params.limit || 20
+      const offset = (page - 1) * limit
+      const orderBy = params.orderBy || 'created_at'
+      const ascending = params.ascending ?? false
+
+      // First, get total count
+      const { count, error: countError } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true })
+
+      if (countError) {
+        return createErrorResponse(handleSupabaseError(countError, 'Failed to count posts'))
+      }
+
+      // Then fetch paginated data with author info
       let query = supabase
         .from('posts')
-        .select('*, author:profiles(username)')
-        .order(options?.orderBy || 'created_at', { 
-          ascending: options?.ascending ?? false 
-        })
-
-      if (options?.limit) {
-        query = query.limit(options.limit)
-      }
+        .select('*, author:profiles(*)')
+        .order(orderBy, { ascending })
+        .range(offset, offset + limit - 1)
 
       const { data, error } = await query
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to fetch posts'))
       }
 
-      return { data: data || [], error: null }
+      const total = count || 0
+      const totalPages = Math.ceil(total / limit)
+
+      const paginatedResponse: PaginatedResponse<PostWithAuthor> = {
+        data: data || [],
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+
+      return createSuccessResponse(paginatedResponse)
     } catch (err) {
       console.error('Error fetching posts:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to fetch posts' } 
-      }
+      return createErrorResponse<PaginatedResponse<PostWithAuthor>>(err, 'Failed to fetch posts')
     }
   }
 
@@ -55,71 +76,30 @@ export function usePosts() {
     try {
       const { data, error } = await supabase
         .from('posts')
-        .select('*, author:profiles(username)')
+        .select('*, author:profiles(*)')
         .eq('id', id)
         .single()
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to fetch post'))
       }
 
-      return { data, error: null }
+      return createSuccessResponse(data)
     } catch (err) {
       console.error('Error fetching post:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to fetch post' } 
-      }
+      return createErrorResponse<PostWithAuthor>(err, 'Failed to fetch post')
     }
   }
 
   /**
    * Ensure user has a profile, create one if missing
+   * Uses the centralized useUserProfile composable
    * @returns Boolean indicating if profile exists or was created
    */
   async function ensureUserProfile(): Promise<boolean> {
-    if (!user.value) return false
-
-    try {
-      // First, check if profile exists
-      const { data: profile, error: fetchError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.value.id)
-        .single()
-
-      // If profile exists, return true
-      if (profile) return true
-
-      // If profile doesn't exist (fetchError indicates no rows), create one
-      if (fetchError?.code === 'PGRST116') {
-        // Create profile with username from user metadata or email
-        const username = user.value.user_metadata?.username || 
-                         user.value.email?.split('@')[0] || 
-                         `user_${user.value.id.substring(0, 8)}`
-        
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.value.id,
-            username: username
-          })
-
-        if (insertError) {
-          console.error('Failed to create profile:', insertError)
-          return false
-        }
-
-        return true
-      }
-
-      // Other database error
-      console.error('Error checking profile:', fetchError)
-      return false
-    } catch (err) {
-      console.error('Error ensuring user profile:', err)
-      return false
-    }
+    const { ensureUserProfile: ensureProfile } = useUserProfile()
+    const result = await ensureProfile()
+    return !!result.data
   }
 
   /**
@@ -129,17 +109,14 @@ export function usePosts() {
    */
   async function createPost(postData: PostForm): Promise<ApiResponse<Post>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<Post>('User must be logged in')
     }
 
     try {
       // Ensure user has a profile before creating post
       const hasProfile = await ensureUserProfile()
       if (!hasProfile) {
-        return { 
-          data: null, 
-          error: { message: 'Cannot create post: user profile setup failed' } 
-        }
+        return createErrorResponse<Post>('Cannot create post: user profile setup failed')
       }
 
       const { data, error } = await supabase
@@ -153,16 +130,13 @@ export function usePosts() {
         .single()
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to create post'))
       }
 
-      return { data, error: null }
+      return createSuccessResponse(data)
     } catch (err) {
       console.error('Error creating post:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to create post' } 
-      }
+      return createErrorResponse<Post>(err, 'Failed to create post')
     }
   }
 
@@ -177,7 +151,7 @@ export function usePosts() {
     postData: Partial<PostForm>
   ): Promise<ApiResponse<Post>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<Post>('User must be logged in')
     }
 
     try {
@@ -194,16 +168,13 @@ export function usePosts() {
         .single()
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to update post'))
       }
 
-      return { data, error: null }
+      return createSuccessResponse(data)
     } catch (err) {
       console.error('Error updating post:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to update post' } 
-      }
+      return createErrorResponse<Post>(err, 'Failed to update post')
     }
   }
 
@@ -214,7 +185,7 @@ export function usePosts() {
    */
   async function deletePost(id: string): Promise<ApiResponse<boolean>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<boolean>('User must be logged in')
     }
 
     try {
@@ -225,16 +196,13 @@ export function usePosts() {
         .eq('user_id', user.value.id) // Ensure user owns the post
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to delete post'))
       }
 
-      return { data: true, error: null }
+      return createSuccessResponse(true)
     } catch (err) {
       console.error('Error deleting post:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to delete post' } 
-      }
+      return createErrorResponse<boolean>(err, 'Failed to delete post')
     }
   }
 

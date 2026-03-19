@@ -1,11 +1,12 @@
 import type { User, ApiResponse, LoginForm, RegisterForm } from '~/types'
+import type { Database } from '~/types/supabase'
 
 /**
  * Composable for authentication operations
  * Provides a unified interface for auth-related functionality
  */
 export function useAuth() {
-  const supabase = useSupabaseClient()
+  const supabase = useSupabaseClient<Database>()
   const supabaseUser = useSupabaseUser()
 
   /**

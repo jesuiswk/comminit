@@ -63,37 +63,160 @@
         <p class="empty-state-text font-mono">Be the first to start a conversation!</p>
         <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary mt-4 font-mono">$ create_post</NuxtLink>
       </div>
+
+      <!-- Pagination Controls -->
+      <div v-if="posts?.length && totalPages > 1" class="pagination-controls mt-8">
+        <div class="flex justify-center items-center gap-4">
+          <button 
+            @click="loadPrevPage" 
+            :disabled="!hasPrevPage || pending"
+            class="btn btn-secondary font-mono"
+            :class="{ 'opacity-50 cursor-not-allowed': !hasPrevPage || pending }"
+          >
+            ← Previous
+          </button>
+          
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-sm">Page</span>
+            <select 
+              v-model="currentPage" 
+              @change="goToPage(currentPage)"
+              :disabled="pending"
+              class="form-input font-mono text-sm py-1 px-2"
+            >
+              <option v-for="pageNum in totalPages" :key="pageNum" :value="pageNum">
+                {{ pageNum }}
+              </option>
+            </select>
+            <span class="font-mono text-sm">of {{ totalPages }}</span>
+          </div>
+          
+          <button 
+            @click="loadNextPage" 
+            :disabled="!hasNextPage || pending"
+            class="btn btn-secondary font-mono"
+            :class="{ 'opacity-50 cursor-not-allowed': !hasNextPage || pending }"
+          >
+            Next →
+          </button>
+        </div>
+        
+        <div class="text-center mt-2">
+          <p class="font-mono text-sm text-text-muted">
+            Showing {{ posts.length }} of {{ postsData?.total || 0 }} posts
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { PostWithAuthor } from '~/types'
+import type { PostWithAuthor, PaginatedResponse } from '~/types'
 
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
 const error = ref('')
+const currentPage = ref(1)
+const postsPerPage = 12
 
-const { data: posts, pending, refresh } = await useAsyncData<PostWithAuthor[]>('posts', async () => {
+const { data: postsData, pending, refresh } = await useAsyncData<PaginatedResponse<PostWithAuthor>>('posts', async () => {
   error.value = ''
   try {
+    const page = currentPage.value
+    const limit = postsPerPage
+    const offset = (page - 1) * limit
+    
+    // First, get total count
+    const { count, error: countError } = await supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+    
+    if (countError) {
+      error.value = countError.message
+      return {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: postsPerPage,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPrevPage: false
+      }
+    }
+    
+    // Then fetch paginated data
     const { data, error: fetchError } = await supabase
       .from('posts')
-      .select('*, author:profiles(username)')
+      .select('*, author:profiles(*)')
       .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
     
     if (fetchError) {
       error.value = fetchError.message
-      return []
+      return {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: postsPerPage,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPrevPage: false
+      }
     }
     
-    return data || []
+    const total = count || 0
+    const totalPages = Math.ceil(total / limit)
+    
+    return {
+      data: data || [],
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1
+    }
   } catch (e) {
     error.value = 'Failed to load posts'
     console.error('Error fetching posts:', e)
-    return []
+    return {
+      data: [],
+      total: 0,
+      page: 1,
+      limit: postsPerPage,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPrevPage: false
+    }
   }
 })
+
+const posts = computed(() => postsData.value?.data || [])
+const hasNextPage = computed(() => postsData.value?.hasNextPage || false)
+const hasPrevPage = computed(() => postsData.value?.hasPrevPage || false)
+const totalPages = computed(() => postsData.value?.totalPages || 0)
+
+const loadNextPage = async () => {
+  if (hasNextPage.value) {
+    currentPage.value++
+    await refresh()
+  }
+}
+
+const loadPrevPage = async () => {
+  if (hasPrevPage.value) {
+    currentPage.value--
+    await refresh()
+  }
+}
+
+const goToPage = async (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+    await refresh()
+  }
+}
 
 // SEO Meta
 useSeoMeta({

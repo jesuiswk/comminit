@@ -1,3 +1,4 @@
+import type { Database } from '~/types/supabase'
 import { defineStore } from 'pinia'
 import type { User, LoginForm, RegisterForm, ApiResponse } from '~/types'
 
@@ -28,7 +29,7 @@ export const useAuthStore = defineStore('auth', {
      * Initialize auth state from Supabase session
      */
     async initializeAuth() {
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session?.user) {
@@ -50,7 +51,7 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -91,7 +92,7 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         const { data, error } = await supabase.auth.signUp({
@@ -137,7 +138,7 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         const { error } = await supabase.auth.signOut()
@@ -169,7 +170,7 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       this.error = null
 
-      const supabase = useSupabaseClient()
+      const supabase = useSupabaseClient<Database>()
 
       try {
         // Update auth user metadata
