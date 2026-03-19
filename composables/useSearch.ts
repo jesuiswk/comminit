@@ -1,12 +1,16 @@
 import type { Database } from '~/types/supabase'
 import type { PostWithAuthor, Profile, CommentWithAuthor, SearchParams, PaginatedResponse, ApiResponse } from '~/types'
 
+// Discriminated union type for search results
+type SearchResult = PostWithAuthor | Profile | CommentWithAuthor
+
 /**
  * Composable for search operations
  * Provides search functionality across posts, users, and comments
  */
 export function useSearch() {
   const supabase = useSupabaseClient<Database>()
+  const { handleSupabaseError, createSuccessResponse, createErrorResponse } = useErrorHandling()
 
   /**
    * Search across posts, users, and comments
@@ -15,24 +19,21 @@ export function useSearch() {
    */
   async function search(
     params: SearchParams
-  ): Promise<ApiResponse<PaginatedResponse<any>>> {
+  ): Promise<ApiResponse<PaginatedResponse<SearchResult>>> {
     try {
       const { query, type = 'posts', page = 1, limit = 20 } = params
       const offset = (page - 1) * limit
 
       if (!query.trim()) {
-        return {
-          data: {
-            data: [],
-            total: 0,
-            page,
-            limit,
-            totalPages: 0,
-            hasNextPage: false,
-            hasPrevPage: false
-          },
-          error: null
-        }
+        return createSuccessResponse<PaginatedResponse<SearchResult>>({
+          data: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false
+        })
       }
 
       switch (type) {
@@ -43,17 +44,11 @@ export function useSearch() {
         case 'comments':
           return await searchComments(query, page, limit, offset)
         default:
-          return {
-            data: null,
-            error: { message: 'Invalid search type' }
-          }
+          return createErrorResponse<PaginatedResponse<SearchResult>>('Invalid search type')
       }
     } catch (err) {
       console.error('Search error:', err)
-      return {
-        data: null,
-        error: { message: 'Failed to perform search' }
-      }
+      return createErrorResponse<PaginatedResponse<SearchResult>>(err, 'Failed to perform search')
     }
   }
 
@@ -74,7 +69,7 @@ export function useSearch() {
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
 
       if (countError) {
-        return { data: null, error: { message: countError.message, code: countError.code } }
+        return createErrorResponse(handleSupabaseError(countError, 'Failed to count posts'))
       }
 
       // Then fetch paginated data with author info
@@ -86,7 +81,7 @@ export function useSearch() {
         .range(offset, offset + limit - 1)
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to search posts'))
       }
 
       const total = count || 0
@@ -102,13 +97,10 @@ export function useSearch() {
         hasPrevPage: page > 1
       }
 
-      return { data: paginatedResponse, error: null }
+      return createSuccessResponse(paginatedResponse)
     } catch (err) {
       console.error('Post search error:', err)
-      return {
-        data: null,
-        error: { message: 'Failed to search posts' }
-      }
+      return createErrorResponse<PaginatedResponse<PostWithAuthor>>(err, 'Failed to search posts')
     }
   }
 
@@ -129,7 +121,7 @@ export function useSearch() {
         .ilike('username', `%${query}%`)
 
       if (countError) {
-        return { data: null, error: { message: countError.message, code: countError.code } }
+        return createErrorResponse(handleSupabaseError(countError, 'Failed to count users'))
       }
 
       // Then fetch paginated data
@@ -141,7 +133,7 @@ export function useSearch() {
         .range(offset, offset + limit - 1)
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to search users'))
       }
 
       const total = count || 0
@@ -157,13 +149,10 @@ export function useSearch() {
         hasPrevPage: page > 1
       }
 
-      return { data: paginatedResponse, error: null }
+      return createSuccessResponse(paginatedResponse)
     } catch (err) {
       console.error('User search error:', err)
-      return {
-        data: null,
-        error: { message: 'Failed to search users' }
-      }
+      return createErrorResponse<PaginatedResponse<Profile>>(err, 'Failed to search users')
     }
   }
 
@@ -184,7 +173,7 @@ export function useSearch() {
         .ilike('content', `%${query}%`)
 
       if (countError) {
-        return { data: null, error: { message: countError.message, code: countError.code } }
+        return createErrorResponse(handleSupabaseError(countError, 'Failed to count comments'))
       }
 
       // Then fetch paginated data with author info
@@ -196,7 +185,7 @@ export function useSearch() {
         .range(offset, offset + limit - 1)
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to search comments'))
       }
 
       const total = count || 0
@@ -212,13 +201,10 @@ export function useSearch() {
         hasPrevPage: page > 1
       }
 
-      return { data: paginatedResponse, error: null }
+      return createSuccessResponse(paginatedResponse)
     } catch (err) {
       console.error('Comment search error:', err)
-      return {
-        data: null,
-        error: { message: 'Failed to search comments' }
-      }
+      return createErrorResponse<PaginatedResponse<CommentWithAuthor>>(err, 'Failed to search comments')
     }
   }
 
@@ -232,10 +218,11 @@ export function useSearch() {
   }>> {
     try {
       if (!query.trim()) {
-        return {
-          data: { posts: [], users: [], comments: [] },
-          error: null
-        }
+        return createSuccessResponse({
+          posts: [],
+          users: [],
+          comments: []
+        })
       }
 
       // Fetch limited suggestions from each category
@@ -263,13 +250,14 @@ export function useSearch() {
         comments: commentsResult.data || []
       }
 
-      return { data: suggestions, error: null }
+      return createSuccessResponse(suggestions)
     } catch (err) {
       console.error('Suggestions error:', err)
-      return {
-        data: null,
-        error: { message: 'Failed to get search suggestions' }
-      }
+      return createErrorResponse<{
+        posts: PostWithAuthor[]
+        users: Profile[]
+        comments: CommentWithAuthor[]
+      }>(err, 'Failed to get search suggestions')
     }
   }
 
@@ -288,13 +276,10 @@ export function useSearch() {
         'feedback'
       ]
 
-      return { data: trendingTerms, error: null }
+      return createSuccessResponse(trendingTerms)
     } catch (err) {
       console.error('Trending searches error:', err)
-      return {
-        data: null,
-        error: { message: 'Failed to get trending searches' }
-      }
+      return createErrorResponse<string[]>(err, 'Failed to get trending searches')
     }
   }
 

@@ -115,29 +115,29 @@
 import type { PostWithAuthor, PaginatedResponse } from '~/types'
 
 const user = useSupabaseUser()
-const supabase = useSupabaseClient()
 const error = ref('')
 const currentPage = ref(1)
 const postsPerPage = 12
 
-const { data: postsData, pending, refresh } = await useAsyncData<PaginatedResponse<PostWithAuthor>>('posts', async () => {
-  error.value = ''
-  try {
-    const page = currentPage.value
-    const limit = postsPerPage
-    const offset = (page - 1) * limit
+// Use the composable for posts
+const { fetchPosts } = usePosts()
+
+  const { data: postsData, pending, refresh } = await useAsyncData<PaginatedResponse<PostWithAuthor>>('posts', async () => {
+    error.value = ''
     
-    // First, get total count
-    const { count, error: countError } = await supabase
-      .from('posts')
-      .select('*', { count: 'exact', head: true })
+    const response = await fetchPosts({
+      page: currentPage.value,
+      limit: postsPerPage,
+      orderBy: 'created_at',
+      ascending: false
+    })
     
-    if (countError) {
-      error.value = countError.message
+    if (response.error) {
+      error.value = response.error.message
       return {
         data: [],
         total: 0,
-        page: 1,
+        page: currentPage.value,
         limit: postsPerPage,
         totalPages: 0,
         hasNextPage: false,
@@ -145,52 +145,16 @@ const { data: postsData, pending, refresh } = await useAsyncData<PaginatedRespon
       }
     }
     
-    // Then fetch paginated data
-    const { data, error: fetchError } = await supabase
-      .from('posts')
-      .select('*, author:profiles(*)')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
-    
-    if (fetchError) {
-      error.value = fetchError.message
-      return {
-        data: [],
-        total: 0,
-        page: 1,
-        limit: postsPerPage,
-        totalPages: 0,
-        hasNextPage: false,
-        hasPrevPage: false
-      }
-    }
-    
-    const total = count || 0
-    const totalPages = Math.ceil(total / limit)
-    
-    return {
-      data: data || [],
-      total,
-      page,
-      limit,
-      totalPages,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1
-    }
-  } catch (e) {
-    error.value = 'Failed to load posts'
-    console.error('Error fetching posts:', e)
-    return {
+    return response.data || {
       data: [],
       total: 0,
-      page: 1,
+      page: currentPage.value,
       limit: postsPerPage,
       totalPages: 0,
       hasNextPage: false,
       hasPrevPage: false
     }
-  }
-})
+  })
 
 const posts = computed(() => postsData.value?.data || [])
 const hasNextPage = computed(() => postsData.value?.hasNextPage || false)

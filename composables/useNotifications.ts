@@ -8,6 +8,7 @@ import type { Notification, ApiResponse, PaginationParams, PaginatedResponse } f
 export function useNotifications() {
   const supabase = useSupabaseClient<Database>()
   const user = useSupabaseUser()
+  const { handleSupabaseError, createSuccessResponse, createErrorResponse } = useErrorHandling()
 
   /**
    * Fetch notifications for the current user with pagination
@@ -18,7 +19,7 @@ export function useNotifications() {
     params: PaginationParams = {}
   ): Promise<ApiResponse<PaginatedResponse<Notification>>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<PaginatedResponse<Notification>>('User must be logged in')
     }
 
     try {
@@ -35,7 +36,7 @@ export function useNotifications() {
         .eq('user_id', user.value.id)
 
       if (countError) {
-        return { data: null, error: { message: countError.message, code: countError.code } }
+        return createErrorResponse(handleSupabaseError(countError, 'Failed to count notifications'))
       }
 
       // Then fetch paginated data
@@ -49,7 +50,7 @@ export function useNotifications() {
       const { data, error } = await query
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to fetch notifications'))
       }
 
       const total = count || 0
@@ -65,13 +66,10 @@ export function useNotifications() {
         hasPrevPage: page > 1
       }
 
-      return { data: paginatedResponse, error: null }
+      return createSuccessResponse(paginatedResponse)
     } catch (err) {
       console.error('Error fetching notifications:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to fetch notifications' } 
-      }
+      return createErrorResponse<PaginatedResponse<Notification>>(err, 'Failed to fetch notifications')
     }
   }
 
@@ -81,7 +79,7 @@ export function useNotifications() {
    */
   async function fetchUnreadCount(): Promise<ApiResponse<number>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<number>('User must be logged in')
     }
 
     try {
@@ -92,16 +90,13 @@ export function useNotifications() {
         .eq('read', false)
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to fetch unread count'))
       }
 
-      return { data: count || 0, error: null }
+      return createSuccessResponse(count || 0)
     } catch (err) {
       console.error('Error fetching unread count:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to fetch unread notification count' } 
-      }
+      return createErrorResponse<number>(err, 'Failed to fetch unread notification count')
     }
   }
 
@@ -112,7 +107,7 @@ export function useNotifications() {
    */
   async function markAsRead(notificationId: string): Promise<ApiResponse<boolean>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<boolean>('User must be logged in')
     }
 
     try {
@@ -123,16 +118,13 @@ export function useNotifications() {
         .eq('user_id', user.value.id)
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to mark notification as read'))
       }
 
-      return { data: true, error: null }
+      return createSuccessResponse(true)
     } catch (err) {
       console.error('Error marking notification as read:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to mark notification as read' } 
-      }
+      return createErrorResponse<boolean>(err, 'Failed to mark notification as read')
     }
   }
 
@@ -142,7 +134,7 @@ export function useNotifications() {
    */
   async function markAllAsRead(): Promise<ApiResponse<number>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<number>('User must be logged in')
     }
 
     try {
@@ -151,16 +143,13 @@ export function useNotifications() {
       })
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to mark all notifications as read'))
       }
 
-      return { data: (data as number) || 0, error: null }
+      return createSuccessResponse((data as number) || 0)
     } catch (err) {
       console.error('Error marking all notifications as read:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to mark all notifications as read' } 
-      }
+      return createErrorResponse<number>(err, 'Failed to mark all notifications as read')
     }
   }
 
@@ -171,7 +160,7 @@ export function useNotifications() {
    */
   async function deleteNotification(notificationId: string): Promise<ApiResponse<boolean>> {
     if (!user.value) {
-      return { data: null, error: { message: 'User must be logged in' } }
+      return createErrorResponse<boolean>('User must be logged in')
     }
 
     try {
@@ -182,16 +171,13 @@ export function useNotifications() {
         .eq('user_id', user.value.id)
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to delete notification'))
       }
 
-      return { data: true, error: null }
+      return createSuccessResponse(true)
     } catch (err) {
       console.error('Error deleting notification:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to delete notification' } 
-      }
+      return createErrorResponse<boolean>(err, 'Failed to delete notification')
     }
   }
 
@@ -221,16 +207,13 @@ export function useNotifications() {
       })
 
       if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
+        return createErrorResponse(handleSupabaseError(error, 'Failed to create notification'))
       }
 
-      return { data: notification as Notification, error: null }
+      return createSuccessResponse(notification as Notification)
     } catch (err) {
       console.error('Error creating notification:', err)
-      return { 
-        data: null, 
-        error: { message: 'Failed to create notification' } 
-      }
+      return createErrorResponse<Notification>(err, 'Failed to create notification')
     }
   }
 

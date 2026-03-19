@@ -1,12 +1,11 @@
 import type { User, ApiResponse, LoginForm, RegisterForm } from '~/types'
-import type { Database } from '~/types/supabase'
 
 /**
  * Composable for authentication operations
- * Provides a unified interface for auth-related functionality
+ * Delegates to the Pinia auth store for a single source of truth
  */
 export function useAuth() {
-  const supabase = useSupabaseClient<Database>()
+  const store = useAuthStore()
   const supabaseUser = useSupabaseUser()
 
   /**
@@ -14,16 +13,7 @@ export function useAuth() {
    * @returns Current user or null
    */
   function getCurrentUser(): User | null {
-    if (!supabaseUser.value) return null
-    
-    return {
-      id: supabaseUser.value.id,
-      email: supabaseUser.value.email || '',
-      user_metadata: {
-        username: supabaseUser.value.user_metadata?.username || ''
-      },
-      created_at: supabaseUser.value.created_at || ''
-    }
+    return store.currentUser
   }
 
   /**
@@ -31,7 +21,7 @@ export function useAuth() {
    * @returns Boolean indicating auth status
    */
   function isAuthenticated(): boolean {
-    return !!supabaseUser.value
+    return store.isAuthenticated
   }
 
   /**
@@ -42,37 +32,7 @@ export function useAuth() {
   async function signIn(
     credentials: LoginForm
   ): Promise<ApiResponse<User>> {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: credentials.email,
-        password: credentials.password
-      })
-
-      if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
-      }
-
-      if (!data.user) {
-        return { data: null, error: { message: 'Login failed' } }
-      }
-
-      const user: User = {
-        id: data.user.id,
-        email: data.user.email || '',
-        user_metadata: {
-          username: data.user.user_metadata?.username || ''
-        },
-        created_at: data.user.created_at
-      }
-
-      return { data: user, error: null }
-    } catch (err) {
-      console.error('Sign in error:', err)
-      return { 
-        data: null, 
-        error: { message: 'An unexpected error occurred during sign in' } 
-      }
-    }
+    return store.signIn(credentials)
   }
 
   /**
@@ -83,42 +43,7 @@ export function useAuth() {
   async function signUp(
     credentials: RegisterForm
   ): Promise<ApiResponse<User>> {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: credentials.email,
-        password: credentials.password,
-        options: {
-          data: {
-            username: credentials.username
-          }
-        }
-      })
-
-      if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
-      }
-
-      if (!data.user) {
-        return { data: null, error: { message: 'Registration failed' } }
-      }
-
-      const user: User = {
-        id: data.user.id,
-        email: data.user.email || '',
-        user_metadata: {
-          username: data.user.user_metadata?.username || ''
-        },
-        created_at: data.user.created_at
-      }
-
-      return { data: user, error: null }
-    } catch (err) {
-      console.error('Sign up error:', err)
-      return { 
-        data: null, 
-        error: { message: 'An unexpected error occurred during registration' } 
-      }
-    }
+    return store.signUp(credentials)
   }
 
   /**
@@ -126,21 +51,7 @@ export function useAuth() {
    * @returns Success status or error
    */
   async function signOut(): Promise<ApiResponse<boolean>> {
-    try {
-      const { error } = await supabase.auth.signOut()
-
-      if (error) {
-        return { data: null, error: { message: error.message, code: error.code } }
-      }
-
-      return { data: true, error: null }
-    } catch (err) {
-      console.error('Sign out error:', err)
-      return { 
-        data: null, 
-        error: { message: 'An unexpected error occurred during sign out' } 
-      }
-    }
+    return store.signOut()
   }
 
   /**
@@ -151,47 +62,21 @@ export function useAuth() {
   async function updateProfile(updates: { 
     username?: string 
   }): Promise<ApiResponse<User>> {
-    if (!supabaseUser.value) {
-      return { data: null, error: { message: 'User not authenticated' } }
-    }
+    return store.updateProfile(updates)
+  }
 
-    try {
-      // Update auth user metadata
-      const { data: authData, error: authError } = await supabase.auth.updateUser({
-        data: updates
-      })
+  /**
+   * Initialize auth state from Supabase session
+   */
+  async function initializeAuth(): Promise<void> {
+    await store.initializeAuth()
+  }
 
-      if (authError) {
-        return { data: null, error: { message: authError.message, code: authError.code } }
-      }
-
-      // Update profile in database
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', supabaseUser.value.id)
-
-      if (profileError) {
-        return { data: null, error: { message: profileError.message, code: profileError.code } }
-      }
-
-      const user: User = {
-        id: authData.user.id,
-        email: authData.user.email || '',
-        user_metadata: {
-          username: authData.user.user_metadata?.username || ''
-        },
-        created_at: authData.user.created_at
-      }
-
-      return { data: user, error: null }
-    } catch (err) {
-      console.error('Update profile error:', err)
-      return { 
-        data: null, 
-        error: { message: 'An unexpected error occurred while updating profile' } 
-      }
-    }
+  /**
+   * Clear any auth errors
+   */
+  function clearError(): void {
+    store.clearError()
   }
 
   return {
@@ -200,6 +85,13 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    updateProfile
+    updateProfile,
+    initializeAuth,
+    clearError,
+    // Expose store properties for reactive access
+    user: computed(() => store.user),
+    loading: computed(() => store.loading),
+    error: computed(() => store.error),
+    username: computed(() => store.username)
   }
 }
