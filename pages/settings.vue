@@ -59,6 +59,68 @@
           </div>
         </div>
         
+        <!-- Bio & Links Section -->
+        <div class="settings-section">
+          <h2 class="settings-title font-display">Bio & Links</h2>
+          <p class="settings-description font-mono">Tell others about yourself. These will appear on your profile.</p>
+          
+          <form @submit.prevent="updateBioAndLinks" class="mt-4">
+            <div class="form-group">
+              <label class="form-label">Bio</label>
+              <textarea 
+                v-model="bio" 
+                class="form-input"
+                rows="4"
+                placeholder="Tell us about yourself..."
+                maxlength="500"
+              ></textarea>
+              <div class="text-xs text-muted mt-1 font-mono">
+                {{ bio.length }}/500 characters
+              </div>
+            </div>
+            
+            <div class="form-group mt-4">
+              <label class="form-label">Website</label>
+              <input 
+                v-model="website" 
+                type="url" 
+                class="form-input"
+                placeholder="https://example.com"
+              />
+              <div class="text-xs text-muted mt-1 font-mono">
+                Optional - your personal website or blog
+              </div>
+            </div>
+            
+            <div class="form-group mt-4">
+              <label class="form-label">Location</label>
+              <input 
+                v-model="location" 
+                type="text" 
+                class="form-input"
+                placeholder="City, Country"
+              />
+              <div class="text-xs text-muted mt-1 font-mono">
+                Optional - where you're based
+              </div>
+            </div>
+            
+            <div class="form-actions mt-6">
+              <button 
+                type="submit" 
+                class="btn btn-primary" 
+                :disabled="bioLoading || (!bio.trim() && !website.trim() && !location.trim())"
+                :class="{ 'btn-loading': bioLoading }"
+              >
+                <span v-if="!bioLoading">Save Bio & Links</span>
+                <span v-else class="sr-only">Saving...</span>
+              </button>
+              <div v-if="bioError" class="validation-error mt-2">{{ bioError }}</div>
+              <div v-if="bioSuccess" class="success-message mt-2">{{ bioSuccess }}</div>
+            </div>
+          </form>
+        </div>
+        
         <!-- Account Info Section -->
         <div class="settings-section">
           <h2 class="settings-title font-display">Account Information</h2>
@@ -108,6 +170,14 @@ const usernameLoading = ref(false)
 const usernameError = ref('')
 const currentProfile = ref<Profile | null>(null)
 
+// Bio & Links state
+const bio = ref('')
+const website = ref('')
+const location = ref('')
+const bioLoading = ref(false)
+const bioError = ref('')
+const bioSuccess = ref('')
+
 // Fetch current profile data
 onMounted(async () => {
   if (user.value) {
@@ -125,6 +195,13 @@ const fetchProfile = async () => {
     
     if (error) throw error
     currentProfile.value = data
+    
+    // Initialize bio & links form with current values
+    if (data) {
+      bio.value = data.bio || ''
+      website.value = data.website || ''
+      location.value = data.location || ''
+    }
   } catch (error) {
     console.error('Error fetching profile:', error)
   }
@@ -181,6 +258,80 @@ const updateUsername = async () => {
     usernameError.value = 'An unexpected error occurred'
   } finally {
     usernameLoading.value = false
+  }
+}
+
+const updateBioAndLinks = async () => {
+  if (!user.value) return
+  
+  bioLoading.value = true
+  bioError.value = ''
+  bioSuccess.value = ''
+  
+  try {
+    // Validate website URL format if provided
+    if (website.value.trim() && !isValidUrl(website.value.trim())) {
+      bioError.value = 'Please enter a valid URL (e.g., https://example.com)'
+      bioLoading.value = false
+      return
+    }
+    
+    // Prepare updates
+    const updates: any = {}
+    if (bio.value.trim()) updates.bio = bio.value.trim()
+    if (website.value.trim()) updates.website = website.value.trim()
+    if (location.value.trim()) updates.location = location.value.trim()
+    
+    // If no updates, just return
+    if (Object.keys(updates).length === 0) {
+      bioLoading.value = false
+      return
+    }
+    
+    // Update profile using direct Supabase call (since authStore.updateProfile might not handle these fields)
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.value.id)
+      .select()
+      .single()
+    
+    if (error) {
+      bioError.value = error.message
+    } else {
+      // Update local profile
+      if (currentProfile.value) {
+        if (updates.bio !== undefined) currentProfile.value.bio = updates.bio
+        if (updates.website !== undefined) currentProfile.value.website = updates.website
+        if (updates.location !== undefined) currentProfile.value.location = updates.location
+      }
+      
+      bioSuccess.value = 'Bio & links updated successfully!'
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        bioSuccess.value = ''
+      }, 3000)
+    }
+  } catch (error) {
+    console.error('Error updating bio & links:', error)
+    bioError.value = 'An unexpected error occurred'
+  } finally {
+    bioLoading.value = false
+  }
+}
+
+const isValidUrl = (url: string): boolean => {
+  try {
+    // Add https:// if no protocol is specified
+    const urlWithProtocol = url.includes('://') ? url : `https://${url}`
+    new URL(urlWithProtocol)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -304,6 +455,22 @@ const formatDate = (dateString: string): string => {
 .btn-danger:hover {
   background: rgba(255, 91, 139, 0.2);
   border-color: rgba(255, 91, 139, 0.5);
+}
+
+.validation-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin-top: var(--space-xs);
+}
+
+.success-message {
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  margin-top: var(--space-xs);
+}
+
+.text-muted {
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {

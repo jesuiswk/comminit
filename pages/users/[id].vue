@@ -63,8 +63,53 @@
               </div>
             </div>
 
+            <!-- Bio -->
+            <div v-if="userProfile.bio" class="profile-bio mt-4">
+              <p class="font-mono text-base">{{ userProfile.bio }}</p>
+            </div>
+
+            <!-- Additional Info -->
+            <div v-if="userProfile.website || userProfile.location" class="profile-additional mt-4">
+              <div v-if="userProfile.website" class="profile-additional-item">
+                <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                  <path d="M9 12L11 14L15 10" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <a :href="userProfile.website" target="_blank" rel="noopener noreferrer" class="font-mono text-sm link">
+                  {{ userProfile.website }}
+                </a>
+              </div>
+              <div v-if="userProfile.location" class="profile-additional-item">
+                <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                  <path d="M12 8V12L15 15" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="font-mono text-sm">{{ userProfile.location }}</span>
+              </div>
+            </div>
+
             <!-- Stats -->
-            <div class="profile-stats">
+            <div class="profile-stats mt-6">
               <div class="stat-item">
                 <div class="stat-number font-display">{{ postsData?.total || 0 }}</div>
                 <div class="stat-label font-mono">Posts</div>
@@ -73,22 +118,68 @@
                 <div class="stat-number font-display">{{ commentsCount }}</div>
                 <div class="stat-label font-mono">Comments</div>
               </div>
+              <div class="stat-item">
+                <div class="stat-number font-display">{{ followStats?.followerCount || 0 }}</div>
+                <div class="stat-label font-mono">Followers</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number font-display">{{ followStats?.followingCount || 0 }}</div>
+                <div class="stat-label font-mono">Following</div>
+              </div>
             </div>
           </div>
 
-          <!-- Actions (if viewing own profile) -->
-          <div v-if="isOwnProfile" class="profile-actions">
-            <NuxtLink to="/settings" class="btn btn-primary font-mono">
-              <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" 
-                  stroke="currentColor" 
-                  stroke-width="2" 
-                  stroke-linecap="round" 
-                  stroke-linejoin="round"
-                />
-              </svg>
-              Edit Profile
-            </NuxtLink>
+          <!-- Actions -->
+          <div class="profile-actions">
+            <div v-if="isOwnProfile">
+              <NuxtLink to="/settings" class="btn btn-primary font-mono">
+                <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                Edit Profile
+              </NuxtLink>
+            </div>
+            <div v-else-if="currentUser">
+              <button 
+                @click="handleFollowToggle" 
+                :disabled="followLoading"
+                class="btn font-mono"
+                :class="followStats?.isFollowing ? 'btn-secondary' : 'btn-primary'"
+              >
+                <svg v-if="followLoading" class="icon animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2V6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M12 18V22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4.93 4.93L7.76 7.76" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M16.24 16.24L19.07 19.07" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 12H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M18 12H22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4.93 19.07L7.76 16.24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M16.24 7.76L19.07 4.93" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <svg v-else class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 21V19C16 17.9391 15.5786 16.9217 14.8284 16.1716C14.0783 15.4214 13.0609 15 12 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                  <path d="M8.5 11C10.7091 11 12.5 9.20914 12.5 7C12.5 4.79086 10.7091 3 8.5 3C6.29086 3 4.5 4.79086 4.5 7C4.5 9.20914 6.29086 11 8.5 11Z" 
+                    stroke="currentColor" 
+                    stroke-width="2" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"
+                  />
+                  <path v-if="!followStats?.isFollowing" d="M20 8V14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path v-if="!followStats?.isFollowing" d="M23 11H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                {{ followStats?.isFollowing ? 'Following' : 'Follow' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -164,6 +255,7 @@
 
 <script setup lang="ts">
 import type { Profile, PostWithAuthor, PaginatedResponse } from '~/types'
+import { useFollow } from '~/composables/useFollow'
 
 const route = useRoute()
 const supabase = useSupabaseClient()
@@ -179,6 +271,9 @@ const userProfile = ref<Profile | null>(null)
 const commentsCount = ref(0)
 const currentPage = ref(1)
 const postsPerPage = 12
+
+// Follow system
+const { toggleFollow, getFollowStats, loading: followLoading, followStats } = useFollow()
 
 // Fetch user data
 const fetchUserData = async () => {
@@ -279,6 +374,8 @@ const isOwnProfile = computed(() => {
   return user.value?.id === userId
 })
 
+const currentUser = computed(() => user.value)
+
 const userInitial = computed(() => {
   if (!userProfile.value) return 'U'
   return userProfile.value.username.charAt(0).toUpperCase()
@@ -313,6 +410,23 @@ const formatDate = (dateString: string): string => {
     day: 'numeric' 
   })
 }
+
+// Handle follow toggle
+const handleFollowToggle = async () => {
+  if (!user.value) return
+  
+  const result = await toggleFollow(userId)
+  if (result.error) {
+    console.error('Error toggling follow:', result.error)
+  }
+}
+
+// Fetch follow stats when user profile is loaded
+watch(userProfile, async (newProfile) => {
+  if (newProfile && user.value) {
+    await getFollowStats(userId)
+  }
+}, { immediate: true })
 
 // Fetch data on page load
 await fetchUserData()
@@ -402,6 +516,41 @@ useSeoMeta({
   color: var(--color-accent);
 }
 
+.profile-bio {
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.profile-additional {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.profile-additional-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.profile-additional-item .icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.profile-additional-item .link {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.profile-additional-item .link:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
 .profile-stats {
   display: flex;
   gap: var(--space-2xl);
@@ -409,6 +558,12 @@ useSeoMeta({
 
 .stat-item {
   text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
 }
 
 .stat-number {
@@ -427,6 +582,33 @@ useSeoMeta({
 
 .profile-actions {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.profile-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  white-space: nowrap;
+}
+
+.profile-actions .icon {
+  flex-shrink: 0;
+}
+
+.profile-actions .icon.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .section-header {

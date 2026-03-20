@@ -1,312 +1,188 @@
 # Comminit - Improvements & Technical Debt
 
-## 📊 **Current Status**
-- **TypeScript**: ✅ 0 errors, 0 warnings
-- **Build Status**: ✅ Ready for production
-- **Core Functionality**: ✅ Auth, Posts, Comments, Notifications, Search, Profile pictures
+## Current Status
+- **TypeScript**: 0 errors, 0 warnings
+- **Build Status**: Ready for production
+- **Core Functionality**: Auth, Posts, Comments, Notifications, Search, Profile pictures, Likes
 - **Stack**: Nuxt 3 · Supabase · Pinia · Zod · Vitest
 
 ---
 
-## 🔴 **Critical — Architecture Debt**
+## Progress Tracker
 
-### 1. Duplicated Auth Logic Between Store and Composable
-**Problem**: `stores/auth.ts` and `composables/useAuth.ts` both implement `signIn`, `signUp`, `signOut`, and `updateProfile` with near-identical Supabase calls. Any auth change must be made in two places.
+### Sprint 1 — Architecture Cleanup ✅
+- [x] Merge `useAuth.ts` + `stores/auth.ts` duplication — `useAuth.ts` delegates to Pinia store
+- [x] Fix `index.vue` to use `usePosts()` composable — using `fetchPosts()` from composable
+- [x] Apply `useErrorHandling()` to `useNotifications.ts` and `useSearch.ts` — both use standardized error handling
+- [x] Remove `.backup` files and `quick-fix-typescript.sh` from git — removed, added `*.backup` to `.gitignore`
+- [x] Add missing DB indexes — `supabase/add_missing_indexes.sql` created
+
+### Sprint 2 — Performance ✅
+- [x] Combine count+data into single Supabase call in `index.vue` and `usePosts.ts` — using `{ count: 'exact' }`
+- [x] Add full-text search SQL — `supabase/add_fulltext_search.sql` created
+- [x] Update `useSearch.ts` to use `.textSearch('search_vector', query)` instead of `ilike` — done
+- [x] Debounce search suggestions in `SearchBar.vue` — 300ms debounce with `lodash-es`
+- [x] Wire `SearchBar.vue` into `AppHeader.vue` — done
+
+### Sprint 3 — Features ✅ (verified)
+- [x] Likes system — `useLikes.ts`, `LikeButton.vue`, `supabase/add_likes_system.sql`, integrated in `PostCard.vue`
+  - ✅ **RESOLVED**: `useLikes.ts` now uses the `likes` table and calls `toggle_like`, `get_like_count` RPCs. Schema mismatch fixed.
+- [x] Like notification triggers — in `add_likes_system.sql`
+- [x] Threaded comments UI — `CommentItem.vue` with nested replies, integrated in `pages/posts/[id].vue`
+- [x] `plugins/click-outside.ts` — `v-click-outside` directive, wired in `SearchBar.vue` and `NotificationBell.vue`
+- [x] `EmptyState.vue` + `SkeletonLoader.vue` — components created and wired into pages
+- [x] Wire `EmptyState.vue` and `SkeletonLoader.vue` into pages — `index.vue` and `posts/[id].vue` updated with skeleton loaders and empty states
+- [x] Comment likes UI — `LikeButton` added to `CommentItem.vue` with `toggleCommentLike`, `getCommentLikeStatus` from `useLikes.ts`
+- [x] Add comment notification DB trigger (post author notified on new comment) — `notify_on_comment()` function and `after_comment_insert` trigger added
+- [x] User follow system (`follows` table + `useFollow.ts` + UI) — **COMPLETED**: `useFollow.ts`, `add_follows_system.sql`, follow button on `users/[id].vue`, and "Following" feed on homepage with tab switcher
+- [x] Post categories/tags (DB column + form selector + filter UI)
+- [x] Fix `getTrendingSearches()` — remove hardcoded array or implement real tracking
+- [x] User bio / extended profile fields (`bio`, `website`, `location`) — **COMPLETED**: DB columns + types exist, `users/[id].vue` displays them, `settings.vue` now has edit form with validation
+- [x] Draft saving for posts in `pages/posts/new.vue`
+
+### Sprint 4 — Polish & Reliability
+- [ ] Fix `useSearch.ts` `any` return type — use `SearchResult` discriminated union
+- [ ] Soft deletes for posts/comments (`deleted_at` column + RLS filter)
+- [ ] Email verification flow after sign-up
+- [ ] Rate limiting on login/register forms (client-side, 2s cooldown)
+- [ ] Type-safe `supabase.rpc()` calls in `useNotifications.ts`
+- [ ] Wire or remove `useOptimisticUpdates.ts` — currently only used in `examples/`, not in production code
+- [ ] Type barrel — re-export `Database`, `Json` from `~/types` so imports are unified
+- [x] Fix `toggle_like` SQL security issue — function accepts `p_user_id` as a caller-supplied param; use `auth.uid()` internally to prevent impersonation
+- [ ] E2E tests with Playwright
+- [ ] GitHub Actions CI pipeline
+
+---
+
+## Detailed Issue Reference
+
+### 🔴 Critical — Architecture Debt
+
+#### ~~1. Duplicated Auth Logic Between Store and Composable~~ ✅
 **Files**: `stores/auth.ts`, `composables/useAuth.ts`
-**Fix**: Make `useAuth.ts` delegate to the Pinia store, or eliminate the store and use only the composable with `useState` for reactivity. Pick one source of truth.
-```typescript
-// Option A — composable delegates to store:
-export function useAuth() {
-  const store = useAuthStore()
-  return { signIn: store.signIn, signOut: store.signOut, ... }
-}
+**Status**: RESOLVED — `useAuth.ts` now delegates to the Pinia store.
 
-// Option B — remove store, use composable + useState for global state:
-const user = useState<User | null>('auth.user', () => null)
-```
+#### ~~2. `index.vue` Bypasses the `usePosts()` Composable~~ ✅
+**File**: `pages/index.vue`
+**Status**: RESOLVED — Now uses `fetchPosts()` from `usePosts()` composable.
 
-### 2. `index.vue` Bypasses the `usePosts()` Composable
-**Problem**: The homepage reimplements pagination logic and direct Supabase queries inline instead of calling `usePosts().fetchPosts()`. Bugs fixed in `usePosts` won't apply to the homepage.
-**File**: `pages/index.vue` (lines ~65–115)
-**Fix**: Replace inline data fetching with `usePosts().fetchPosts({ page, limit })` and bind the reactive result.
+#### ~~3. `useNotifications.ts` / `useSearch.ts` Skip the Standardized Error Handler~~ ✅
+**Status**: RESOLVED — Both composables use `useErrorHandling()` with `createErrorResponse`, `createSuccessResponse`, `handleSupabaseError`.
 
-### 3. `useNotifications.ts` Skips the Standardized Error Handler
-**Problem**: `usePosts.ts` and `useComments.ts` use `useErrorHandling()` for consistent error shapes. `useNotifications.ts` and `useSearch.ts` hand-roll `{ data: null, error: { message: ... } }` objects inline, creating divergence.
-**Files**: `composables/useNotifications.ts`, `composables/useSearch.ts`
-**Fix**: Import and use `useErrorHandling()` in both — `createErrorResponse`, `createSuccessResponse`, `handleSupabaseError`.
-
-### 4. `useSearch.ts` Returns `any` Type
-**Problem**: `search()` is typed as `Promise<ApiResponse<PaginatedResponse<any>>>`. This defeats TypeScript's purpose for consumers of this function.
+#### 4. `useSearch.ts` Returns `any` Type
 **File**: `composables/useSearch.ts`
-**Fix**: Use a discriminated union return type:
+**Fix**:
 ```typescript
 type SearchResult = PostWithAuthor | Profile | CommentWithAuthor
 async function search(params: SearchParams): Promise<ApiResponse<PaginatedResponse<SearchResult>>>
 ```
 
+#### ~~5. `useLikes.ts` / `add_likes_system.sql` Schema Mismatch~~ ✅
+**Problem**: `useLikes.ts` was written against a `reactions` table with RPCs (`toggle_post_reaction`, `get_post_reaction_count`, `has_user_reacted_to_post`, view `post_reaction_stats`). The SQL migration creates a `likes` table with functions named `toggle_like`, `get_like_count`, `has_user_liked`.
+**Status**: RESOLVED — `useLikes.ts` updated to use `likes` table and new RPC functions. TypeScript types updated in `types/supabase.ts`.
+
 ---
 
-## 🟠 **High Priority — Performance**
+### 🟠 High Priority — Performance
 
-### 1. Search Uses Unindexed `ilike` — Add Full-Text Search
-**Problem**: `useSearch.ts` queries with `.or('title.ilike.%query%,content.ilike.%query%')`. Wildcards on both sides can't use B-tree indexes, causing full-table scans that degrade with content volume.
-**File**: `composables/useSearch.ts`, `supabase/schema.sql`
-**Fix**: Enable Postgres full-text search with `tsvector` + GIN index:
-```sql
--- In Supabase SQL editor:
-ALTER TABLE posts ADD COLUMN search_vector tsvector
-  GENERATED ALWAYS AS (
-    setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(content, '')), 'B')
-  ) STORED;
-CREATE INDEX posts_search_idx ON posts USING GIN(search_vector);
-```
-```typescript
-// In useSearch.ts:
-const { data } = await supabase
-  .from('posts')
-  .select('*, author:profiles(*)')
-  .textSearch('search_vector', query)
-```
+#### ~~1. Search Uses `ilike` — Full-Text Search SQL Ready, Composable Not Updated~~ ✅
+**Status**: RESOLVED — `useSearch.ts` now uses `.textSearch('search_vector', query)` for posts and comments.
 
-### 2. Homepage Makes Two Sequential DB Calls for Count + Data
-**Problem**: `index.vue` fires a count query then a data query sequentially. Supabase supports both in one request.
-**Fix**:
-```typescript
-const { data, count } = await supabase
-  .from('posts')
-  .select('*, author:profiles(*)', { count: 'exact' })
-  .order('created_at', { ascending: false })
-  .range(offset, offset + limit - 1)
-```
-Apply same pattern in `usePosts.ts` `fetchPosts()`.
+#### ~~2. Homepage Makes Two Sequential DB Calls~~ ✅
+**Status**: RESOLVED — `usePosts.ts` combines count and data into a single query with `{ count: 'exact' }`.
 
-### 3. Search Suggestions Fire 3 Parallel Queries Per Keystroke — Add Debounce
-**Problem**: `getSuggestions()` immediately fires 3 Supabase requests on each input character. At 60 WPM that's ~18 requests/second.
-**File**: `composables/useSearch.ts`, `components/SearchBar.vue`
-**Fix**: Debounce the input handler (300ms) in `SearchBar.vue`. Add a request cancellation mechanism using AbortController if feasible with the Supabase JS client.
-
-### 4. No Client-Side Caching — Data Refetches on Every Navigation
-**Problem**: `useAsyncData` with a static key `'posts'` works for SSR but navigating away and back triggers full refetches. Pinia already exists — use the posts store to cache fetched data.
+#### 3. No Client-Side Caching
 **File**: `stores/posts.ts`, pages
-**Fix**: On `fetchPosts`, check if the store already has fresh data (within a TTL), return it immediately, and refresh in the background. Or use `useFetch` with `getCachedData` option:
-```typescript
-const { data } = await useAsyncData('posts', fetcher, {
-  getCachedData: (key) => useNuxtApp().payload.data[key]
-})
-```
-
-### 5. Missing DB Indexes for Common Query Patterns
-**Problem**: No indexes on `posts.user_id`, `comments.post_id`, `comments.user_id`, `notifications.user_id + read`. These are the most queried columns.
-**File**: `supabase/schema.sql`
-**Fix**:
-```sql
-CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
-CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read) WHERE read = false;
-```
+**Fix**: Check store for fresh data (TTL) before fetching; or use `getCachedData` with `useAsyncData`.
 
 ---
 
-## 🟡 **Medium Priority — Missing Features**
+### 🟡 Medium Priority — Missing Features
 
-### 1. Likes System Is Typed But Not Implemented
-**Problem**: `NotificationType` includes `'like'` and `Post` type has a `category` field, signaling planned features. The "like" UX (heart/upvote on posts and comments) is missing entirely.
-**Implementation**:
-1. Add `likes` table: `id, user_id, post_id (nullable), comment_id (nullable), created_at`
-2. Add RLS: users can only insert/delete their own likes
-3. Add `useLikes.ts` composable with `toggleLike(postId)`, `getLikeCount(postId)`, `hasLiked(postId)`
-4. Add Supabase trigger to insert a `like` notification when a post is liked
-5. Add like button + count to `PostCard.vue` and the post detail page
+#### ~~1. Comment Notification Trigger Missing~~ ✅
+**Status**: RESOLVED — `notify_on_comment()` function and `after_comment_insert` trigger added to `add_likes_system.sql`.
 
-### 2. Threaded Comments Are Half-Built
-**Problem**: `Comment.parent_comment_id` exists in the type and is handled in `createComment()`, but the post detail page UI is flat — no nesting, no reply button visible.
-**File**: `pages/posts/[id].vue`, `composables/useComments.ts`
-**Implementation**:
-1. Group fetched comments into a tree structure client-side:
-```typescript
-function buildCommentTree(comments: CommentWithAuthor[]) {
-  const map = new Map<string, CommentWithAuthor & { replies: CommentWithAuthor[] }>()
-  const roots: typeof map extends Map<any, infer V> ? V[] : never = []
-  comments.forEach(c => map.set(c.id, { ...c, replies: [] }))
-  map.forEach(c => {
-    if (c.parent_comment_id) map.get(c.parent_comment_id)?.replies.push(c)
-    else roots.push(c)
-  })
-  return roots
-}
-```
-2. Add "Reply" button on each comment that pre-fills `parent_comment_id`
-3. Add visual indentation for replies (max 2–3 levels)
+#### ~~2. User Follow System — "Following" Feed Missing~~ ✅
+**Status**: RESOLVED — Complete follow system implemented:
+1. ✅ `follows` table created with `follower_id, following_id, created_at`
+2. ✅ `useFollow.ts` composable with functions for toggling follows, getting follow stats, followers/following lists, mutual follows, user stats, suggested users, and following feed
+3. ✅ Follow button on `pages/users/[id].vue` with real-time follow status and counts
+4. ✅ "Following" feed on homepage (`index.vue`) with tab switcher between "Latest Discussions" and "Following" feed
 
-### 3. User Follow System
-**Problem**: `NotificationType` includes `'follow'` but there's no follower/following relationship in the schema.
-**Implementation**:
-1. Add `follows` table: `follower_id, following_id, created_at` (PK on both columns)
-2. RLS: users can insert/delete their own follows, can read all
-3. Add `useFollow.ts` composable
-4. Show follow button on user profile pages (`pages/users/[id].vue`)
-5. Add "Following" feed view on the homepage (filter posts by followed users)
+#### ~~3. Post Categories/Tags~~ ✅
+**Status**: RESOLVED — `category` column added to `posts` table via `supabase/add_post_categories.sql`. Category selector added to `pages/posts/new.vue` with popular categories dropdown and custom entry. Category filtering implemented on `pages/index.vue` with popular category pills and dropdown selector. Database functions created for category management: `get_post_categories`, `get_posts_by_category`, `count_posts_by_category`, `get_popular_categories`.
 
-### 4. Post Categories/Tags
-**Problem**: `Post` type already has `category?: string` but it's never set or filtered on.
-**Implementation**:
-1. Add `category` column to posts table in Supabase
-2. Add category selector to `pages/posts/new.vue` form (dropdown: General, Technical, Meta, Announcements)
-3. Add category filter tabs/pills on `pages/index.vue`
-4. Index `posts.category` column
+#### ~~4. `getTrendingSearches()` Returns Hardcoded Data~~ ✅
+**Status**: RESOLVED — `search_events` table added via `add_search_tracking.sql`. Queries are logged on each search; `get_trending_searches` RPC returns top 10 in 7 days. `useSearch.ts` calls the RPC with a fallback to defaults.
 
-### 5. Real-Time Notifications Are Subscribed But Never Triggered
-**Problem**: `useNotifications.ts` has `subscribeToNotifications()` and `NotificationBell.vue` exists, but nothing in the backend creates notifications. There are no Supabase database triggers firing on comments, likes, or follows.
-**Implementation**:
-```sql
--- Trigger: notify post author when someone comments
-CREATE OR REPLACE FUNCTION notify_on_comment()
-RETURNS trigger AS $$
-BEGIN
-  IF NEW.user_id != (SELECT user_id FROM posts WHERE id = NEW.post_id) THEN
-    PERFORM create_notification(
-      (SELECT user_id FROM posts WHERE id = NEW.post_id),
-      'comment',
-      'New comment on your post',
-      LEFT(NEW.content, 100),
-      jsonb_build_object('post_id', NEW.post_id, 'comment_id', NEW.id)
-    );
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+#### ~~5. User Bio / Extended Profile — Edit Form Missing~~ ✅
+**Status**: RESOLVED — "Bio & Links" section added to `settings.vue` with inputs for `bio` (textarea with 500 character limit), `website` (URL input with validation), and `location` (text input). Form includes validation, success/error messages, and updates the profile via Supabase. Users can now edit their bio, website, and location from the settings page.
 
-CREATE TRIGGER after_comment_insert
-  AFTER INSERT ON comments
-  FOR EACH ROW EXECUTE FUNCTION notify_on_comment();
-```
-Add similar triggers for likes and follows.
-
-### 6. `getTrendingSearches()` Returns Hardcoded Data
-**Problem**: `useSearch.ts` returns a hardcoded array of strings. This provides zero value and could mislead users.
-**File**: `composables/useSearch.ts`
-**Option A (quick)**: Remove the function entirely until real tracking is built.
-**Option B (proper)**: Add a `search_events` table, log search queries (anonymized), and query top 10 most searched terms in the last 7 days.
-
-### 7. No User Bio or Extended Profile
-**Problem**: `Profile` only has `id`, `username`, `avatar_url`. No bio, website, location — standard fields users expect.
-**Implementation**:
-1. Add columns: `bio TEXT`, `website TEXT`, `location TEXT` to `profiles`
-2. Add fields to `pages/settings.vue`
-3. Display on `pages/users/[id].vue`
-
-### 8. Draft Saving for Posts
-**Problem**: If a user starts writing a post and accidentally navigates away, all content is lost.
-**File**: `pages/posts/new.vue`
-**Fix**: Persist draft to `localStorage` on debounced input. Load draft on mount, clear on successful publish.
-```typescript
-const DRAFT_KEY = 'comminit:post_draft'
-watch(form, (val) => localStorage.setItem(DRAFT_KEY, JSON.stringify(val)), { deep: true })
-onMounted(() => {
-  const saved = localStorage.getItem(DRAFT_KEY)
-  if (saved) Object.assign(form, JSON.parse(saved))
-})
-```
+#### ~~6. Draft Saving for Posts~~ ✅
+**Status**: RESOLVED — "Save as Draft" button added to `pages/posts/new.vue`. Drafts are saved to DB via `saveDraft` in `usePosts` (backed by `add_draft_support.sql`). Includes validation before saving.
 
 ---
 
-## 🔵 **Medium Priority — Security & Correctness**
+### 🔵 Medium Priority — Security & Correctness
 
-### 1. No Rate Limiting on Auth Endpoints (Client Side)
-**Problem**: The login/register forms have no client-side submission throttle. Supabase applies some server-side limits, but explicit client-side feedback is missing.
-**Fix**: Disable submit button for 2 seconds after each attempt. Show countdown. This also prevents accidental double-submissions on slow connections.
+#### 1. No Rate Limiting on Auth Endpoints (Client Side)
+**Fix**: Disable submit button 2s after each attempt with countdown.
 
-### 2. Missing Email Verification Flow
-**Problem**: `signUp()` in `useAuth.ts` / `stores/auth.ts` doesn't handle the email confirmation case. Supabase by default requires email confirmation, but the app doesn't tell users to check their email or handle the `email_not_confirmed` error code gracefully.
-**Fix**: After `signUp`, check if `data.user.email_confirmed_at` is null and show a "Check your email to confirm your account" message. Add a resend confirmation email button.
+#### 2. Missing Email Verification Flow
+**Fix**: After `signUp`, check `data.user.email_confirmed_at === null` and show "Check your email" with a resend button.
 
-### 3. No Soft Delete — Hard Deletes Break Notification References
-**Problem**: Deleting a post deletes it permanently. Any notification that references `post_id` in its `data` JSON now points to a ghost record, breaking navigation from notification to post.
-**Fix**:
-1. Add `deleted_at TIMESTAMPTZ` to posts and comments
-2. Change `deletePost`/`deleteComment` to set `deleted_at = NOW()` instead of hard deleting
-3. Add RLS/view to filter out soft-deleted records from normal queries
-4. Show "This post has been deleted" placeholder for notification links to deleted posts
+#### 3. No Soft Delete — Hard Deletes Break Notification References
+**Fix**: Add `deleted_at TIMESTAMPTZ` to posts/comments. Change delete operations to set `deleted_at`. Add RLS filter.
 
-### 4. `supabase.rpc()` Calls Aren't Type-Safe
-**Problem**: `useNotifications.ts` calls `supabase.rpc('mark_notifications_as_read', ...)` and `supabase.rpc('create_notification', ...)`. These return `unknown` — already flagged in old TODO but not fixed.
+#### 4. `supabase.rpc()` Calls Not Type-Safe
 **File**: `types/supabase.ts`
-**Fix**: Add RPC type definitions:
-```typescript
-mark_notifications_as_read: {
-  Args: { p_user_id: string }
-  Returns: number
-}
-create_notification: {
-  Args: {
-    p_user_id: string; p_type: string; p_title: string;
-    p_content?: string; p_data?: Json
-  }
-  Returns: Database['public']['Tables']['notifications']['Row']
-}
-```
+**Fix**: Add RPC definitions for `mark_notifications_as_read` and `create_notification`.
+
+#### ~~5. `toggle_like` SQL Function Accepts Arbitrary `p_user_id`~~ ✅
+**File**: `supabase/add_likes_system.sql`
+**Problem**: `toggle_like(p_user_id, ...)` is called with a user-supplied UUID. Any authenticated user could pass a different user's ID and like on their behalf.
+**Status**: RESOLVED — Removed `p_user_id` parameter and updated function to use `auth.uid()` internally.
 
 ---
 
-## 🟢 **Low Priority — Code Quality & DX**
+### 🟢 Low Priority — Code Quality & DX
 
-### 1. Remove Backup Files and Cleanup Scripts from Repo
-**Problem**: The repo has `.backup` files and a `quick-fix-typescript.sh` in the root that shouldn't be committed.
-**Files to delete**:
-- `composables/useNotifications.ts.backup`
-- `middleware/auth.ts.backup`
-- `nuxt.config.ts.backup`
-- `pages/posts/[id].vue.backup`
-- `quick-fix-typescript.sh`
+#### ~~1. Remove Backup Files and Cleanup Scripts~~ ✅
+**Status**: RESOLVED — All backup files and `quick-fix-typescript.sh` removed. Added `*.backup` to `.gitignore`.
 
-**Fix**: `git rm` these files, add `*.backup` to `.gitignore`.
-
-### 2. Type Barrel — Stop Importing From Two Type Files
-**Problem**: Some files import from `~/types` and `~/types/supabase` separately. With a barrel:
+#### 2. Type Barrel — Unify Import Source
 ```typescript
 // types/index.ts — add at bottom:
 export type { Database, Json } from './supabase'
 ```
-Then all imports become `import type { Post, Database } from '~/types'`.
 
-### 3. `useOptimisticUpdates.ts` Is Unused
-**Problem**: The composable exists but it's unclear if it's wired anywhere.
-**Fix**: Either wire it to `usePosts` / `useComments` mutations, or remove it.
+#### 3. `useOptimisticUpdates.ts` Is Unused in Production
+**Status**: Only referenced in `examples/OptimisticUpdatesExample.vue`.
+**Fix**: Wire it to `usePosts`/`useComments` mutations, or remove it.
 
-### 4. `SearchBar.vue` Is Not in the Layout
-**Problem**: `SearchBar.vue` is a component but doesn't appear to be used in `layouts/default.vue` or `AppHeader.vue`.
-**Fix**: Integrate it into `AppHeader.vue` — add a search icon button that expands an input inline (like GitHub's header search).
-
-### 5. `Post.category` Field Has No DB Column
-**Problem**: `types/index.ts` declares `category?: string` on `Post` but the database schema doesn't have this column (it was never migrated).
-**Fix**: Either migrate the column (see Feature #4 above) or remove the field from the type until it's implemented.
+#### 4. `Post.category` Field Has No DB Column
+**Fix**: Either migrate the column (see Feature above) or remove from the type.
 
 ---
 
-## 🧪 **Testing**
+### 🧪 Testing
 
-### 1. Missing Composable Tests
-**Current coverage**: Only `usePosts.test.ts` exists for composables.
+#### 1. Missing Composable Tests
 **Add**:
-- `tests/composables/useComments.test.ts` — createComment, deleteComment, canEditComment
-- `tests/composables/useAuth.test.ts` — signIn error paths, signOut, updateProfile
-- `tests/composables/useNotifications.test.ts` — fetchUnreadCount, markAllAsRead
-- `tests/composables/useSearch.test.ts` — empty query returns empty result, type routing
+- `tests/composables/useComments.test.ts`
+- `tests/composables/useAuth.test.ts`
+- `tests/composables/useNotifications.test.ts`
+- `tests/composables/useSearch.test.ts`
+- `tests/composables/useLikes.test.ts`
 
-### 2. Add E2E Tests with Playwright
-**Why Playwright over Cypress**: Better Nuxt 3 SSR support, faster, built-in request interception.
+#### 2. Add E2E Tests with Playwright
 ```bash
 npm install -D @playwright/test @nuxt/test-utils
 ```
-**Critical flows to cover**:
-- Register → verify welcome state → create post → view post
-- Login → add comment → see notification
-- Search for a post → navigate to result
+**Critical flows**: register → create post → view post, login → comment → notification, search → navigate.
 
-### 3. Add CI Pipeline (GitHub Actions)
-**File to create**: `.github/workflows/ci.yml`
+#### 3. Add CI Pipeline (GitHub Actions)
+**File**: `.github/workflows/ci.yml`
 ```yaml
 on: [push, pull_request]
 jobs:
@@ -323,36 +199,29 @@ jobs:
 
 ---
 
-## 📦 **Build & Deployment**
+### 📦 Build & Deployment
 
-### 1. Validate Environment Variables at Startup
-**File**: `nuxt.config.ts`
+#### 1. Validate Environment Variables at Startup
 ```typescript
-// Add before defineNuxtConfig:
 const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_KEY']
 requiredEnvVars.forEach(key => {
   if (!process.env[key]) throw new Error(`Missing required env var: ${key}`)
 })
 ```
 
-### 2. Add `robots.txt` and `sitemap.xml` Dynamic Routes
-**Problem**: `@nuxtjs/seo` is installed but sitemap only covers static routes. Post pages are dynamic.
-**Fix**: Add dynamic sitemap routes:
+#### 2. Add Dynamic Sitemap Routes
 ```typescript
-// nuxt.config.ts
-sitemap: {
-  sources: ['/api/__sitemap__/urls'],
-},
+sitemap: { sources: ['/api/__sitemap__/urls'] }
 ```
-Create `server/api/__sitemap__/urls.ts` that queries Supabase for all public post IDs.
+Create `server/api/__sitemap__/urls.ts` querying all public post IDs.
 
-### 3. Bundle Analysis
-**Run**: `npx nuxt build && npx nuxt-bundle-analyzer`
-**Target**: < 500KB gzipped JS. Check if `lodash-es` is being tree-shaken properly.
+#### 3. Bundle Analysis
+Run: `npx nuxt build && npx nuxt-bundle-analyzer`
+Target: < 500KB gzipped JS.
 
 ---
 
-## 📊 **Success Metrics**
+## Success Metrics
 
 | Metric | Current | Target |
 |---|---|---|
@@ -361,40 +230,9 @@ Create `server/api/__sitemap__/urls.ts` that queries Supabase for all public pos
 | Test coverage | < 20% | > 70% |
 | TypeScript strict errors | 0 | 0 (maintain) |
 | Critical security vulns | 0 | 0 (maintain) |
-| DB query count per page | 2+ | 1 |
+| DB query count per page | 1 | 1 (maintain) |
 
 ---
 
-## 🗓️ **Suggested Execution Order**
-
-### Sprint 1 (this week) — Architecture cleanup
-1. [ ] Merge `useAuth.ts` + `stores/auth.ts` duplication
-2. [ ] Fix `index.vue` to use `usePosts()` composable
-3. [ ] Apply `useErrorHandling()` to `useNotifications.ts` and `useSearch.ts`
-4. [ ] Remove `.backup` files and `quick-fix-typescript.sh` from git
-5. [ ] Add missing DB indexes to `schema.sql`
-
-### Sprint 2 — Performance
-6. [ ] Combine count+data into single Supabase call everywhere
-7. [ ] Add full-text search with `tsvector`
-8. [ ] Debounce search suggestions in `SearchBar.vue`
-9. [ ] Wire `SearchBar.vue` into `AppHeader.vue`
-
-### Sprint 3 — Features
-10. [ ] Implement likes system (table + composable + UI)
-11. [ ] Add DB triggers for notifications (comment, like events)
-12. [ ] Add user bio fields to profile
-13. [ ] Draft saving in post creation form
-14. [ ] Fix `getTrendingSearches()` (remove or implement)
-
-### Sprint 4 — Polish & Reliability
-15. [ ] Threaded comments UI
-16. [ ] Soft deletes for posts/comments
-17. [ ] Email verification flow
-18. [ ] E2E tests with Playwright
-19. [ ] GitHub Actions CI pipeline
-
----
-
-**Last Updated**: March 19, 2026
+**Last Updated**: March 19, 2026 (rev 3)
 **Next Review**: April 2, 2026

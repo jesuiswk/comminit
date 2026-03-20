@@ -35,34 +35,137 @@
     <!-- Posts Section -->
     <div class="posts-section">
       <div class="section-header glass p-4 rounded-lg">
-        <div>
-          <h2 class="section-title font-display">Latest Discussions</h2>
-          <p class="section-subtitle font-mono">Join conversations happening right now</p>
+        <div class="flex flex-col md:flex-row md:items-center justify-between w-full gap-4">
+          <div class="flex flex-col md:flex-row md:items-center gap-4">
+            <!-- Feed Type Tabs -->
+            <div class="feed-tabs flex gap-2">
+              <button 
+                @click="setFeedType('latest')"
+                class="feed-tab"
+                :class="{ 'feed-tab-active': feedType === 'latest' }"
+              >
+                Latest Discussions
+              </button>
+              <button 
+                v-if="user"
+                @click="setFeedType('following')"
+                class="feed-tab"
+                :class="{ 'feed-tab-active': feedType === 'following' }"
+              >
+                Following
+                <span v-if="followingCount > 0" class="feed-count">{{ followingCount }}</span>
+              </button>
+            </div>
+            
+            <div>
+              <h2 class="section-title font-display hidden md:block">
+                {{ feedType === 'latest' ? 'Latest Discussions' : 'From People You Follow' }}
+              </h2>
+              <p class="section-subtitle font-mono hidden md:block">
+                {{ feedType === 'latest' ? 'Join conversations happening right now' : 'Posts from users you follow' }}
+              </p>
+            </div>
+          </div>
+          
+          <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary font-mono">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            $ new_post
+          </NuxtLink>
         </div>
-        <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary font-mono">
-          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          $ new_post
-        </NuxtLink>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="category-filter glass p-4 rounded-lg mb-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 class="font-display text-lg font-semibold mb-2">Filter by Category</h3>
+            <div class="flex flex-wrap gap-2">
+              <button 
+                @click="selectCategory('')"
+                class="category-pill"
+                :class="{ 'category-pill-active': !selectedCategory }"
+              >
+                All Posts
+              </button>
+              <button 
+                v-for="cat in popularCategories"
+                :key="cat.category"
+                @click="selectCategory(cat.category)"
+                class="category-pill"
+                :class="{ 'category-pill-active': selectedCategory === cat.category }"
+              >
+                {{ cat.category }}
+                <span class="category-count">{{ cat.post_count }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <select 
+                v-model="selectedCategory"
+                @change="onCategoryChange"
+                class="category-select font-mono text-sm"
+              >
+                <option value="">All Categories</option>
+                <option v-for="cat in allCategories" :key="cat.category" :value="cat.category">
+                  {{ cat.category }} ({{ cat.post_count }})
+                </option>
+              </select>
+              <div class="select-arrow">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <button 
+              v-if="selectedCategory"
+              @click="clearCategoryFilter"
+              class="btn btn-outline btn-sm font-mono"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        <div v-if="selectedCategory" class="mt-4 pt-4 border-t border-border">
+          <p class="font-mono text-sm">
+            Showing posts in: <span class="font-semibold text-accent">{{ selectedCategory }}</span>
+            <button 
+              @click="() => refresh()"
+              class="ml-2 btn btn-outline btn-xs font-mono"
+              :disabled="pending"
+            >
+              {{ pending ? 'Loading...' : 'Refresh' }}
+            </button>
+          </p>
+        </div>
       </div>
       
-      <!-- Loading, Error, or Posts -->
-      <LoadingSpinner v-if="pending" />
+      <!-- Loading State with Skeleton -->
+      <div v-if="pending" class="posts-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        <SkeletonLoader v-for="i in 6" :key="i" type="post" size="md" />
+      </div>
+      
+      <!-- Error State -->
       <ErrorMessage v-else-if="error" :message="error" @retry="refresh" />
+      
+      <!-- Posts Grid -->
       <div v-else-if="posts?.length" class="posts-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         <PostCard v-for="post in posts" :key="post.id" :post="post" />
       </div>
       
       <!-- Empty State -->
-      <div v-else class="text-center empty-state card p-8 rounded-lg">
-        <div class="empty-state-icon">
-          <div class="icon-box" style="width: 64px; height: 64px; font-size: 24px; margin: 0 auto;">ci</div>
-        </div>
-        <h3 class="empty-state-title font-display">No posts yet</h3>
-        <p class="empty-state-text font-mono">Be the first to start a conversation!</p>
-        <NuxtLink v-if="user" to="/posts/new" class="btn btn-primary mt-4 font-mono">$ create_post</NuxtLink>
-      </div>
+      <EmptyState
+        v-else
+        icon="📝"
+        title="No posts yet"
+        description="Be the first to start a conversation!"
+        :action-text="user ? '$ create_post' : undefined"
+        size="lg"
+        variant="bordered"
+        @action="navigateTo('/posts/new')"
+      />
 
       <!-- Pagination Controls -->
       <div v-if="posts?.length && totalPages > 1" class="pagination-controls mt-8">
@@ -112,19 +215,144 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
 import type { PostWithAuthor, PaginatedResponse } from '~/types'
 
 const user = useSupabaseUser()
 const error = ref('')
 const currentPage = ref(1)
 const postsPerPage = 12
+const selectedCategory = ref('')
+const popularCategories = ref<Array<{ category: string; post_count: number }>>([])
+const allCategories = ref<Array<{ category: string; post_count: number }>>([])
+const feedType = ref<'latest' | 'following'>('latest')
+const followingCount = ref(0)
 
-// Use the composable for posts
-const { fetchPosts } = usePosts()
+// Use the composables
+const { fetchPosts, fetchPostsByCategory, getPopularCategories, getPostCategories } = usePosts()
+const { getFollowingFeed, getFollowing } = useFollow()
 
-  const { data: postsData, pending, refresh } = await useAsyncData<PaginatedResponse<PostWithAuthor>>('posts', async () => {
-    error.value = ''
+// Load categories on mount
+onMounted(async () => {
+  const popularResult = await getPopularCategories(8)
+  if (popularResult.data) {
+    popularCategories.value = popularResult.data
+  }
+  
+  const allResult = await getPostCategories()
+  if (allResult.data) {
+    allCategories.value = allResult.data
+  }
+  
+  // Load following count if user is logged in
+  if (user.value) {
+    await loadFollowingCount()
+  }
+})
+
+// Watch for user changes to load following count
+watch(user, async (newUser) => {
+  if (newUser) {
+    await loadFollowingCount()
+  } else {
+    followingCount.value = 0
+    // If user logs out, switch back to latest feed
+    if (feedType.value === 'following') {
+      feedType.value = 'latest'
+    }
+  }
+})
+
+const loadFollowingCount = async () => {
+  if (!user.value) return
+  
+  const result = await getFollowing(user.value.id, 1, 0)
+  if (result.data) {
+    // We need to get the total count, but getFollowing only returns limited data
+    // For now, we'll just show if they're following anyone
+    followingCount.value = result.data.length > 0 ? 1 : 0
+  }
+}
+
+const { data: postsData, pending, refresh } = await useAsyncData<PaginatedResponse<PostWithAuthor>>('posts', async () => {
+  error.value = ''
+  
+  // If feed type is "following" and user is not logged in, show empty
+  if (feedType.value === 'following' && !user.value) {
+    return {
+      data: [],
+      total: 0,
+      page: currentPage.value,
+      limit: postsPerPage,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPrevPage: false
+    }
+  }
+  
+  if (selectedCategory.value) {
+    // Fetch posts by category
+    const response = await fetchPostsByCategory(selectedCategory.value, {
+      page: currentPage.value,
+      limit: postsPerPage,
+      orderBy: 'created_at',
+      ascending: false
+    })
     
+    if (response.error) {
+      error.value = response.error.message
+      return {
+        data: [],
+        total: 0,
+        page: currentPage.value,
+        limit: postsPerPage,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPrevPage: false
+      }
+    }
+    
+    return response.data || {
+      data: [],
+      total: 0,
+      page: currentPage.value,
+      limit: postsPerPage,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPrevPage: false
+    }
+  } else if (feedType.value === 'following' && user.value) {
+    // Fetch following feed
+    const offset = (currentPage.value - 1) * postsPerPage
+    const response = await getFollowingFeed(postsPerPage, offset)
+    
+    if (response.error) {
+      error.value = response.error.message
+      return {
+        data: [],
+        total: 0,
+        page: currentPage.value,
+        limit: postsPerPage,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPrevPage: false
+      }
+    }
+    
+    const posts = response.data || []
+    // For following feed, we don't have pagination metadata from the function
+    // So we'll assume no pagination for now
+    return {
+      data: posts,
+      total: posts.length,
+      page: currentPage.value,
+      limit: postsPerPage,
+      totalPages: Math.ceil(posts.length / postsPerPage),
+      hasNextPage: false,
+      hasPrevPage: false
+    }
+  } else {
+    // Fetch all posts
     const response = await fetchPosts({
       page: currentPage.value,
       limit: postsPerPage,
@@ -154,12 +382,35 @@ const { fetchPosts } = usePosts()
       hasNextPage: false,
       hasPrevPage: false
     }
-  })
+  }
+}, {
+  watch: [selectedCategory, currentPage, feedType]
+})
 
 const posts = computed(() => postsData.value?.data || [])
 const hasNextPage = computed(() => postsData.value?.hasNextPage || false)
 const hasPrevPage = computed(() => postsData.value?.hasPrevPage || false)
 const totalPages = computed(() => postsData.value?.totalPages || 0)
+
+const setFeedType = (type: 'latest' | 'following') => {
+  feedType.value = type
+  currentPage.value = 1 // Reset to first page when changing feed type
+  selectedCategory.value = '' // Clear category filter when switching feed types
+}
+
+const selectCategory = (category: string) => {
+  selectedCategory.value = category
+  currentPage.value = 1 // Reset to first page when changing category
+}
+
+const onCategoryChange = () => {
+  currentPage.value = 1 // Reset to first page when changing category
+}
+
+const clearCategoryFilter = () => {
+  selectedCategory.value = ''
+  currentPage.value = 1
+}
 
 const loadNextPage = async () => {
   if (hasNextPage.value) {
@@ -395,6 +646,163 @@ useSeoMeta({
   }
 }
 
+/* Category Filter Styles */
+.category-filter {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+}
+
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-mono);
+}
+
+.category-pill:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.category-pill-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+  font-weight: 500;
+}
+
+.category-count {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.category-select {
+  appearance: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  padding: 8px 32px 8px 12px;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  min-width: 180px;
+  transition: border-color var(--transition-fast);
+}
+
+.category-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(var(--color-accent-rgb), 0.1);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--color-text-muted);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.btn-xs {
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+}
+
+.mb-6 {
+  margin-bottom: 24px;
+}
+
+.mt-4 {
+  margin-top: 16px;
+}
+
+.pt-4 {
+  padding-top: 16px;
+}
+
+.border-t {
+  border-top: 1px solid var(--color-border);
+}
+
+.ml-2 {
+  margin-left: 8px;
+}
+
+/* Feed Tab Styles */
+.feed-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+
+.feed-tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feed-tab:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.feed-tab-active {
+  background: var(--color-accent);
+  color: white;
+  font-weight: 600;
+}
+
+.feed-count {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
 @media (max-width: 640px) {
   .posts-grid.grid-cols-1 {
     grid-template-columns: 1fr;
@@ -402,6 +810,22 @@ useSeoMeta({
   
   .hero-title {
     font-size: var(--text-3xl);
+  }
+  
+  .category-pill {
+    padding: 4px 8px;
+    font-size: var(--text-xs);
+  }
+  
+  .category-select {
+    min-width: 140px;
+    font-size: var(--text-xs);
+    padding: 6px 28px 6px 10px;
+  }
+  
+  .feed-tab {
+    padding: 6px 12px;
+    font-size: var(--text-xs);
   }
 }
 </style>

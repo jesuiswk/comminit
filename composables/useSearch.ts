@@ -36,6 +36,9 @@ export function useSearch() {
         })
       }
 
+      // Log the search query for trending searches
+      await logSearchQuery(query, type)
+
       switch (type) {
         case 'posts':
           return await searchPosts(query, page, limit, offset)
@@ -254,24 +257,130 @@ export function useSearch() {
   }
 
   /**
+   * Log a search query for trending searches
+   */
+  async function logSearchQuery(query: string, searchType: string = 'posts'): Promise<void> {
+    try {
+      const user = useSupabaseUser()
+      const userId = user.value?.id || null
+      
+      // Don't log empty queries
+      if (!query.trim()) return
+      
+      // Log the search query using the database function
+      await supabase.rpc('log_search_query', {
+        p_query: query,
+        p_user_id: userId,
+        p_search_type: searchType
+      })
+    } catch (err) {
+      // Silently fail - we don't want search logging to break the search functionality
+      console.warn('Failed to log search query:', err)
+    }
+  }
+
+  /**
    * Get trending/popular search terms
    */
   async function getTrendingSearches(): Promise<ApiResponse<string[]>> {
     try {
-      // For now, return some example trending terms
-      // In a real app, you might track search frequency in a separate table
-      const trendingTerms = [
+      // Get trending searches from the database (last 7 days, top 10)
+      const { data, error } = await supabase
+        .rpc('get_trending_searches', {
+          p_limit: 10,
+          p_days: 7
+        })
+
+      if (error) {
+        console.warn('Failed to get trending searches from database, falling back to defaults:', error)
+        // Fallback to default trending terms if database query fails
+        const defaultTrendingTerms = [
+          'getting started',
+          'best practices',
+          'tutorial',
+          'help',
+          'feedback'
+        ]
+        return createSuccessResponse(defaultTrendingTerms)
+      }
+
+      // Extract just the query strings from the result
+      const trendingTerms = (data || []).map((item) => item.query)
+
+      // If we have trending terms, return them
+      if (trendingTerms.length > 0) {
+        return createSuccessResponse(trendingTerms)
+      }
+
+      // Fallback to default trending terms if no data
+      const defaultTrendingTerms = [
         'getting started',
         'best practices',
         'tutorial',
         'help',
         'feedback'
       ]
-
-      return createSuccessResponse(trendingTerms)
+      return createSuccessResponse(defaultTrendingTerms)
     } catch (err) {
       console.error('Trending searches error:', err)
       return createErrorResponse<string[]>(err, 'Failed to get trending searches')
+    }
+  }
+
+  /**
+   * Get user's recent searches
+   */
+  async function getUserRecentSearches(limit: number = 20): Promise<ApiResponse<Array<{
+    query: string
+    search_type: string
+    searched_at: string
+  }>>> {
+    try {
+      const user = useSupabaseUser()
+      if (!user.value) {
+        return createErrorResponse('User must be logged in')
+      }
+
+      const { data, error } = await supabase
+        .rpc('get_user_recent_searches', {
+          p_user_id: user.value.id,
+          p_limit: limit
+        })
+
+      if (error) {
+        return createErrorResponse(handleSupabaseError(error, 'Failed to get user recent searches'))
+      }
+
+      return createSuccessResponse(data || [])
+    } catch (err) {
+      console.error('User recent searches error:', err)
+      return createErrorResponse(err, 'Failed to get user recent searches')
+    }
+  }
+
+  /**
+   * Clear user's search history
+   */
+  async function clearUserSearchHistory(): Promise<ApiResponse<boolean>> {
+    try {
+      const user = useSupabaseUser()
+      if (!user.value) {
+        return createErrorResponse('User must be logged in')
+      }
+
+      const { error } = await supabase
+        .from('search_queries')
+        .delete()
+        .eq('user_id', user.value.id)
+
+      if (error) {
+        return createErrorResponse(handleSupabaseError(error, 'Failed to clear search history'))
+      }
+
+      return createSuccessResponse(true)
+    } catch (err) {
+      console.error('Clear search history error:', err)
+      return createErrorResponse(err, 'Failed to clear search history')
     }
   }
 
@@ -281,6 +390,8 @@ export function useSearch() {
     searchUsers,
     searchComments,
     getSuggestions,
-    getTrendingSearches
+    getTrendingSearches,
+    getUserRecentSearches,
+    clearUserSearchHistory
   }
 }

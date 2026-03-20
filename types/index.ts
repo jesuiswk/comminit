@@ -20,7 +20,10 @@ export interface Profile {
   username: string
   avatar_url?: string | null
   created_at: string
-  updated_at?: string
+  updated_at?: string | null
+  bio?: string | null
+  website?: string | null
+  location?: string | null
 }
 
 // ============================================================================
@@ -33,9 +36,10 @@ export interface Post {
   title: string
   content: string
   created_at: string
-  updated_at?: string
+  updated_at?: string | null
+  draft?: boolean
   author?: Profile
-  category?: string
+  category?: string | null
 }
 
 export interface PostWithAuthor extends Omit<Post, 'author'> {
@@ -79,6 +83,7 @@ export interface RegisterForm {
 export interface PostForm {
   title: string
   content: string
+  category?: string | null
 }
 
 export interface CommentForm {

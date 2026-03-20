@@ -147,7 +147,6 @@
 <script setup lang="ts">
 import type { CommentWithAuthor, PostWithAuthor, Profile } from '~/types'
 import { debounce } from 'lodash-es'
-import { onClickOutside } from '@vueuse/core'
 
 interface SearchSuggestions {
   posts: PostWithAuthor[]
@@ -222,9 +221,6 @@ const goToComment = (comment: CommentWithAuthor) => {
   hideSuggestions()
   navigateTo(`/posts/${comment.post_id}#comment-${comment.id}`)
 }
-
-// Focus search input when clicking outside
-onClickOutside(searchInput, hideSuggestions)
 
 // Keyboard shortcuts
 onMounted(() => {

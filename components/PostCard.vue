@@ -33,8 +33,20 @@
         </div>
       </div>
       
-      <!-- Comment count -->
+      <!-- Post stats (likes and comments) -->
       <div class="post-stats">
+        <!-- Like button using the new component -->
+        <LikeButton
+          :is-liked="likeStatus.liked"
+          :like-count="likeStatus.count"
+          size="sm"
+          variant="heart"
+          :disabled="likeLoading"
+          @like="handleToggleLike"
+          @unlike="handleToggleLike"
+        />
+        
+        <!-- Comment count -->
         <div class="stat font-mono">
           <svg class="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M21 11.5C21.0034 12.8199 20.6951 14.1219 20.1 15.3C19.3944 16.7118 18.3098 17.8992 16.9674 18.7293C15.6251 19.5594 14.0782 19.9994 12.5 20C11.1801 20.0034 9.87812 19.6951 8.7 19.1L3 21L4.9 15.3C4.30493 14.1219 3.99656 12.8199 4 11.5C4.00061 9.92179 4.44061 8.37488 5.27072 7.03258C6.10083 5.69028 7.28825 4.6056 8.7 3.9C9.87812 3.30493 11.1801 2.99656 12.5 3H13C15.0843 3.11499 17.053 3.99477 18.5291 5.47086C20.0052 6.94696 20.885 8.91565 21 11V11.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -50,13 +62,47 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
 import type { PostWithAuthor } from '~/types'
+import { useLikes } from '~/composables/useLikes'
 
 interface Props {
   post: PostWithAuthor
 }
 
 const props = defineProps<Props>()
+
+const { toggleLike, getLikeStatus } = useLikes()
+const likeStatus = ref({ liked: false, count: 0 })
+const likeLoading = ref(false)
+
+// Fetch initial like status
+onMounted(async () => {
+  await fetchLikeStatus()
+})
+
+async function fetchLikeStatus() {
+  const response = await getLikeStatus(props.post.id)
+  if (response.data) {
+    likeStatus.value = response.data
+  }
+}
+
+async function handleToggleLike() {
+  if (likeLoading.value) return
+  
+  likeLoading.value = true
+  try {
+    const response = await toggleLike(props.post.id)
+    if (response.data) {
+      likeStatus.value = response.data
+    }
+  } catch (error) {
+    console.error('Error toggling like:', error)
+  } finally {
+    likeLoading.value = false
+  }
+}
 
 const excerpt = computed(() => {
   const content = props.post.content || ''
@@ -203,11 +249,44 @@ const formatDate = (date: string): string => {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.stat:hover {
+  background: rgba(61, 255, 224, 0.05);
+  color: var(--color-accent);
+}
+
+.stat:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stat.liked {
+  color: var(--color-accent);
+}
+
+.stat.liked .stat-icon {
+  color: var(--color-accent);
 }
 
 .stat-icon {
   opacity: 0.7;
   color: var(--color-accent2);
+  transition: all var(--transition-fast);
+}
+
+.like-button:hover .stat-icon {
+  transform: scale(1.1);
+}
+
+.like-button.liked:hover .stat-icon {
+  transform: scale(0.9);
 }
 
 .animate-fade-in {

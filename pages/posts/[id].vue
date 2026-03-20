@@ -1,12 +1,18 @@
 <template>
   <div>
-    <LoadingSpinner v-if="postPending" message="Loading post..." />
+    <!-- Loading State with Skeleton -->
+    <div v-if="postPending">
+      <SkeletonLoader type="post" size="lg" />
+    </div>
+    
+    <!-- Error State -->
     <ErrorMessage 
       v-else-if="postError" 
       :message="postError" 
       show-retry 
       @retry="refreshPost" 
     />
+    
     <div v-else-if="post">
       <article class="card">
         <div class="post-header">
@@ -84,67 +90,47 @@
           <NuxtLink to="/login">Login</NuxtLink> to comment
         </p>
 
-        <LoadingSpinner v-if="commentsPending" message="Loading comments..." />
-        <div v-else-if="comments?.length" class="comments-list">
-          <div 
-            v-for="comment in comments" 
-            :key="comment.id" 
-            class="comment"
-          >
-            <div class="comment-header">
-              <div class="comment-meta">
-                <strong>{{ comment.author?.username }}</strong>
-                <time>{{ formatDate(comment.created_at) }}</time>
-              </div>
-              <div v-if="canEditComment(comment.user_id)" class="comment-actions">
-                <button 
-                  v-if="editingCommentId !== comment.id"
-                  @click="startEditComment(comment)"
-                  class="btn-text"
-                >
-                  Edit
-                </button>
-                <button 
-                  v-if="editingCommentId !== comment.id"
-                  @click="deleteComment(comment.id)"
-                  class="btn-text btn-danger"
-                >
-                  Delete
-                </button>
-                <template v-else>
-                  <button 
-                    @click="saveCommentEdit(comment.id)"
-                    class="btn-text"
-                    :disabled="savingComment"
-                  >
-                    Save
-                  </button>
-                  <button @click="cancelEditComment" class="btn-text">
-                    Cancel
-                  </button>
-                </template>
-              </div>
-            </div>
-            
-            <div v-if="editingCommentId !== comment.id" class="comment-content">
-              {{ comment.content }}
-            </div>
-            <textarea
-              v-else
-              v-model="editedCommentContent"
-              class="form-textarea"
-              rows="2"
-            />
-          </div>
+        <!-- Comments Loading State -->
+        <div v-if="commentsPending" class="comments-loading">
+          <SkeletonLoader v-for="i in 3" :key="i" type="comment" size="md" />
         </div>
-        <p v-else class="text-center">No comments yet.</p>
+        
+        <!-- Comments List -->
+        <div v-else-if="comments?.length" class="comments-list">
+          <CommentItem 
+            v-for="comment in topLevelComments" 
+            :key="comment.id" 
+            :comment="comment"
+            :replies="comments"
+            @reply="handleReply"
+            @edit="handleEdit"
+            @delete="handleDelete"
+          />
+        </div>
+        
+        <!-- Empty Comments State -->
+        <EmptyState
+          v-else
+          icon="💬"
+          title="No comments yet"
+          description="Be the first to share your thoughts!"
+          size="sm"
+          variant="subtle"
+        />
       </div>
     </div>
-    <div v-else class="text-center not-found">
-      <h2>Post not found</h2>
-      <p>The post you're looking for doesn't exist or has been removed.</p>
-      <NuxtLink to="/" class="btn btn-primary">Back to Home</NuxtLink>
-    </div>
+    
+    <!-- Not Found State -->
+    <EmptyState
+      v-else
+      icon="🔍"
+      title="Post not found"
+      description="The post you're looking for doesn't exist or has been removed."
+      action-text="Back to Home"
+      size="lg"
+      variant="bordered"
+      @action="navigateTo('/')"
+    />
   </div>
 </template>
 
@@ -166,11 +152,6 @@ const editError = ref('')
 const newComment = ref('')
 const addingComment = ref(false)
 const commentError = ref('')
-
-// Comment editing state
-const editingCommentId = ref<string | null>(null)
-const editedCommentContent = ref('')
-const savingComment = ref(false)
 
 // Fetch post
 const postId = computed(() => route.params.id as string)
@@ -208,12 +189,13 @@ const {
   return data || []
 })
 
+// Get top-level comments (comments without parent_comment_id)
+const topLevelComments = computed(() => {
+  return comments.value?.filter(comment => !comment.parent_comment_id) || []
+})
+
 // Permissions
 const canEditPost = (userId: string): boolean => {
-  return user.value?.id === userId
-}
-
-const canEditComment = (userId: string): boolean => {
   return user.value?.id === userId
 }
 
@@ -310,63 +292,23 @@ const addComment = async () => {
   }
 }
 
-// Comment editing
-const startEditComment = (comment: CommentWithAuthor) => {
-  editingCommentId.value = comment.id
-  editedCommentContent.value = comment.content
+// Event handlers for CommentItem events
+const handleReply = async (commentId: string, content: string) => {
+  // The reply is already handled by the CommentItem component
+  // We just need to refresh the comments list
+  await refreshComments()
 }
 
-const cancelEditComment = () => {
-  editingCommentId.value = null
-  editedCommentContent.value = ''
+const handleEdit = async (commentId: string, content: string) => {
+  // The edit is already handled by the CommentItem component
+  // We just need to refresh the comments list
+  await refreshComments()
 }
 
-const saveCommentEdit = async (commentId: string) => {
-  if (!user.value) return
-  
-  savingComment.value = true
-  
-  try {
-    const { error } = await supabase
-      .from('comments')
-      .update({ content: editedCommentContent.value.trim() })
-      .eq('id', commentId)
-      .eq('user_id', user.value.id)
-    
-    if (error) {
-      alert('Failed to update comment: ' + error.message)
-    } else {
-      editingCommentId.value = null
-      editedCommentContent.value = ''
-      await refreshComments()
-    }
-  } catch (e) {
-    alert('An error occurred while updating the comment')
-    console.error('Edit comment error:', e)
-  } finally {
-    savingComment.value = false
-  }
-}
-
-const deleteComment = async (commentId: string) => {
-  if (!user.value || !confirm('Are you sure you want to delete this comment?')) return
-  
-  try {
-    const { error } = await supabase
-      .from('comments')
-      .delete()
-      .eq('id', commentId)
-      .eq('user_id', user.value.id)
-    
-    if (error) {
-      alert('Failed to delete comment: ' + error.message)
-    } else {
-      await refreshComments()
-    }
-  } catch (e) {
-    alert('An error occurred while deleting the comment')
-    console.error('Delete comment error:', e)
-  }
+const handleDelete = async (commentId: string) => {
+  // The delete is already handled by the CommentItem component
+  // We just need to refresh the comments list
+  await refreshComments()
 }
 
 // SEO Meta
@@ -484,50 +426,11 @@ const formatDate = (date: string): string => {
   margin-top: 20px;
 }
 
-.comment {
-  padding: 16px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.comment:last-child {
-  border-bottom: none;
-}
-
-.comment-header {
+.comments-loading {
+  margin-top: 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.comment-meta {
-  display: flex;
-  gap: 10px;
-  color: #666;
-  font-size: 14px;
-  align-items: center;
-}
-
-.comment-content {
-  color: #333;
-  line-height: 1.6;
-}
-
-.btn-text {
-  background: none;
-  border: none;
-  color: #007bff;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.btn-text:hover {
-  text-decoration: underline;
-}
-
-.btn-text.btn-danger {
-  color: #dc3545;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .login-prompt {
@@ -549,5 +452,22 @@ const formatDate = (date: string): string => {
 .not-found p {
   color: #666;
   margin-bottom: 24px;
+}
+
+/* Dark theme support */
+[data-theme="dark"] .meta {
+  color: var(--color-text-muted);
+}
+
+[data-theme="dark"] .comment-form {
+  border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .char-count {
+  color: var(--color-text-muted);
+}
+
+[data-theme="dark"] .login-prompt {
+  background: var(--color-surface-sunken);
 }
 </style>

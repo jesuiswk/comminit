@@ -24,3 +24,6 @@ logs
 
 # Supabase
 supabase/.temp
+
+# Backup files
+*.backup
